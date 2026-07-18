@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sòti MQ — Prototype</title>
+<link rel="manifest" href="./manifest.json" />
+<meta name="theme-color" content="#0E5C56" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Sòti MQ" />
+<link rel="icon" href="./icons/icon-192.png" />
+<link rel="apple-touch-icon" href="./icons/icon-512.png" />
+<style>
+  html, body { margin: 0; padding: 0; background: #EAE0C8; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "lucide-react": "https://esm.sh/lucide-react@0.462.0?external=react"
+  }
+}
+</script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useRef, useEffect } from "react";
+import { createRoot } from "react-dom/client";
+import {
+  Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
+  MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
+  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil
+} from "lucide-react";
+
+/* ---------------------------------- THEME ---------------------------------- */
+const C = {
+  lagon: "#0E5C56",
+  lagonLight: "#1C8FA0",
+  corail: "#E1592A",
+  soleil: "#F2B705",
+  mangrove: "#2F5233",
+  prune: "#7A3B4A",
+  sable: "#F6F0E4",
+  sableDark: "#EAE0C8",
+  encre: "#1E2A24",
+  blanc: "#FFFDF8",
+};
+
+const CATEGORIES = [
+  { id: "plage", label: "Plage", icon: Waves, color: C.lagonLight },
+  { id: "rando", label: "Randonnée", icon: Mountain, color: C.mangrove },
+  { id: "sport", label: "Sport", icon: Dumbbell, color: C.corail },
+  { id: "apero", label: "Apéro & dîner", icon: UtensilsCrossed, color: C.soleil },
+  { id: "culture", label: "Culture & fête", icon: Music, color: C.prune },
+  { id: "nautisme", label: "Nautisme", icon: Anchor, color: C.lagon },
+];
+const catById = (id) => CATEGORIES.find((c) => c.id === id) || CATEGORIES[0];
+
+const COMMUNES = [
+  "Fort-de-France", "Le Lamentin", "Schoelcher", "Saint-Joseph", "Ducos",
+  "Rivière-Salée", "Sainte-Anne", "Le Marin", "Trinité", "Le Robert",
+];
+
+const REPLIES = [
+  "Avec plaisir ! On se retrouve là-bas 😊",
+  "Nickel, à tout à l'heure !",
+  "Super, hâte d'y être 🙌",
+  "Ok reçu, je préviens les autres.",
+  "Parfait, n'oublie pas ta bouteille d'eau !",
+  "On sera plusieurs, ça va être une belle sòti 🌺",
+];
+
+function seedActivities() {
+  return [
+    {
+      id: "a1", titre: "Bain de mer & coucher de soleil",
+      categorie: "plage", commune: "Sainte-Anne", lieu: "Plage des Salines",
+      date: "2026-07-19", heure: "17:00", places: 10,
+      description: "On se pose sur le sable, petite baignade, et on regarde le soleil descendre. Chacun ramène quelque chose à grignoter si le cœur lui en dit.",
+      organisateur: "Nadia", inscrits: ["Nadia", "Kevin", "Sarah"],
+    },
+    {
+      id: "a2", titre: "Rando Cascade Didier",
+      categorie: "rando", commune: "Fort-de-France", lieu: "Cascade Didier",
+      date: "2026-07-20", heure: "08:30", places: 8,
+      description: "Balade tranquille en forêt jusqu'à la cascade, environ 1h30 aller-retour. Prévoir de bonnes chaussures et de l'eau.",
+      organisateur: "Manu", inscrits: ["Manu", "Léa"],
+    },
+    {
+      id: "a3", titre: "Volley plage entre potes",
+      categorie: "sport", commune: "Le Robert", lieu: "Anse Mabouya",
+      date: "2026-07-18", heure: "16:00", places: 12,
+      description: "Deux équipes, ambiance décontractée, tous niveaux bienvenus. On tape la balle jusqu'au coucher de soleil.",
+      organisateur: "Steevy", inscrits: ["Steevy", "Aurélie", "Jonas", "Cindy"],
+    },
+    {
+      id: "a4", titre: "Apéro-dînatoire quartier",
+      categorie: "apero", commune: "Schoelcher", lieu: "Chez Mickaëlle, Terreville",
+      date: "2026-07-21", heure: "19:30", places: 8,
+      description: "Chacun ramène un petit plat ou une boisson. Musique, bonne humeur, on fait connaissance autour de la table.",
+      organisateur: "Mickaëlle", inscrits: ["Mickaëlle"],
+    },
+    {
+      id: "a5", titre: "Marché nocturne & lolos",
+      categorie: "culture", commune: "Le Lamentin", lieu: "Place du marché",
+      date: "2026-07-22", heure: "18:30", places: 15,
+      description: "Découverte du marché du soir, on grignote dans les lolos et on discute. Idéal pour les nouveaux arrivants sur la commune.",
+      organisateur: "Fabien", inscrits: ["Fabien", "Océane"],
+    },
+    {
+      id: "a6", titre: "Sortie kayak Baie des Anglais",
+      categorie: "nautisme", commune: "Le Marin", lieu: "Baie des Anglais",
+      date: "2026-07-25", heure: "09:00", places: 6,
+      description: "Location groupée de kayaks, sortie de 2h le long de la mangrove. Débutants acceptés, encadrement souple.",
+      organisateur: "Yohann", inscrits: ["Yohann", "Priscilla", "Dan"],
+    },
+  ];
+}
+
+/* ------------------------------- SOUS-COMPOSANTS ------------------------------- */
+
+function Wave({ color = C.lagon, height = 14 }) {
+  return (
+    <svg viewBox="0 0 200 20" preserveAspectRatio="none" style={{ width: "100%", height, display: "block" }}>
+      <path d="M0 10 Q 25 0, 50 10 T 100 10 T 150 10 T 200 10 V20 H0 Z" fill={color} opacity="0.9" />
+    </svg>
+  );
+}
+
+function Avatar({ name, size = 32, bg }) {
+  const initial = (name || "?").trim().charAt(0).toUpperCase();
+  const palette = [C.lagon, C.corail, C.mangrove, C.prune, C.lagonLight];
+  const color = bg || palette[(name ? name.charCodeAt(0) : 0) % palette.length];
+  return (
+    <div style={{
+      width: size, height: size, borderRadius: "50%", background: color, color: C.blanc,
+      display: "flex", alignItems: "center", justifyContent: "center",
+      fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: size * 0.42,
+      border: "2px solid " + C.blanc, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", flexShrink: 0,
+    }}>
+      {initial}
+    </div>
+  );
+}
+
+function Chip({ active, onClick, children, colorActive }) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        padding: "7px 14px", borderRadius: 999, fontFamily: "'Work Sans', sans-serif",
+        fontSize: 13.5, fontWeight: 600, whiteSpace: "nowrap", border: "1.5px solid",
+        borderColor: active ? (colorActive || C.lagon) : C.sableDark,
+        background: active ? (colorActive || C.lagon) : C.blanc,
+        color: active ? C.blanc : C.encre, cursor: "pointer", transition: "all .15s ease",
+        flexShrink: 0,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function TicketCard({ activity, joined, onOpen }) {
+  const cat = catById(activity.categorie);
+  const Icon = cat.icon;
+  const d = new Date(activity.date + "T00:00:00");
+  const day = d.toLocaleDateString("fr-FR", { day: "2-digit" });
+  const mon = d.toLocaleDateString("fr-FR", { month: "short" }).replace(".", "");
+  const full = d.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const spotsLeft = activity.places - activity.inscrits.length;
+
+  return (
+    <div
+      onClick={() => onOpen(activity.id)}
+      style={{
+        display: "flex", background: C.blanc, borderRadius: 18, overflow: "hidden",
+        boxShadow: "0 2px 10px rgba(30,42,36,0.08)", cursor: "pointer", marginBottom: 14,
+        border: "1px solid rgba(30,42,36,0.06)",
+      }}
+    >
+      <div style={{
+        width: 78, flexShrink: 0, background: cat.color + "22", position: "relative",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        borderRight: "2px dashed rgba(30,42,36,0.18)",
+      }}>
+        <div style={{ position: "absolute", top: -9, width: 18, height: 18, borderRadius: "50%", background: C.sable }} />
+        <div style={{ position: "absolute", bottom: -9, width: 18, height: 18, borderRadius: "50%", background: C.sable }} />
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 24, fontWeight: 700, color: C.encre, lineHeight: 1 }}>{day}</div>
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, fontWeight: 700, letterSpacing: 1, color: C.encre, textTransform: "uppercase", marginTop: 2 }}>{mon}</div>
+        <div style={{
+          marginTop: 10, width: 32, height: 32, borderRadius: "50%", background: cat.color,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <Icon size={16} color={C.blanc} strokeWidth={2.4} />
+        </div>
+      </div>
+
+      <div style={{ padding: "12px 14px", flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 6 }}>
+          <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16.5, fontWeight: 600, color: C.encre, lineHeight: 1.2 }}>
+            {activity.titre}
+          </div>
+          {joined && (
+            <div style={{ background: C.mangrove, color: C.blanc, borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif", flexShrink: 0 }}>
+              INSCRIT
+            </div>
+          )}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5 }}>
+          <MapPin size={13} /> {activity.lieu} · {activity.commune}
+        </div>
+        <div style={{ textTransform: "capitalize", marginTop: 2, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, display: "flex", alignItems: "center", gap: 4 }}>
+          <Clock size={13} /> {full} · {activity.heure}
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 10 }}>
+          <div style={{ display: "flex" }}>
+            {activity.inscrits.slice(0, 4).map((n, i) => (
+              <div key={i} style={{ marginLeft: i === 0 ? 0 : -8 }}><Avatar name={n} size={24} /></div>
+            ))}
+          </div>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: spotsLeft <= 0 ? C.corail : C.mangrove, fontWeight: 700 }}>
+            {spotsLeft <= 0 ? "COMPLET" : `${activity.inscrits.length}/${activity.places} places`}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- APP ---------------------------------- */
+
+function SotiMQ() {
+  const [screen, setScreen] = useState("onboarding"); // onboarding | app
+  const [obStep, setObStep] = useState(0);
+  const [profile, setProfile] = useState({ prenom: "", commune: COMMUNES[0], interests: [] });
+
+  const [activities, setActivities] = useState(seedActivities());
+  const [joinedIds, setJoinedIds] = useState([]);
+  const [messages, setMessages] = useState({}); // { activityId: [{author,name,text}] }
+
+  const [tab, setTab] = useState("fil");
+  const [filterCat, setFilterCat] = useState("Toutes");
+  const [filterCommune, setFilterCommune] = useState("Toutes");
+  const [detailId, setDetailId] = useState(null);
+  const [chatId, setChatId] = useState(null);
+  const [showBanner, setShowBanner] = useState(true);
+
+  const [form, setForm] = useState({
+    titre: "", categorie: "plage", commune: COMMUNES[0], lieu: "",
+    date: "", heure: "", places: 6, description: "",
+  });
+
+  const chatEndRef = useRef(null);
+  useEffect(() => {
+    if (chatId) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, chatId]);
+
+  /* ---------- helpers ---------- */
+  const getActivity = (id) => activities.find((a) => a.id === id);
+
+  const chatPartnerFor = (activity) => {
+    if (!activity) return "Le groupe";
+    if (activity.organisateur !== profile.prenom) return activity.organisateur;
+    return activity.inscrits.find((n) => n !== profile.prenom) || "un participant";
+  };
+
+  function toggleInterest(id) {
+    setProfile((p) => ({
+      ...p,
+      interests: p.interests.includes(id) ? p.interests.filter((i) => i !== id) : [...p.interests, id],
+    }));
+  }
+
+  function finishOnboarding() {
+    setScreen("app");
+    setTab("fil");
+  }
+
+  function joinActivity(id) {
+    setActivities((prev) => prev.map((a) => {
+      if (a.id !== id) return a;
+      if (a.inscrits.includes(profile.prenom)) return a;
+      if (a.inscrits.length >= a.places) return a;
+      return { ...a, inscrits: [...a.inscrits, profile.prenom] };
+    }));
+    setJoinedIds((prev) => [...new Set([...prev, id])]);
+    setMessages((prev) => {
+      if (prev[id]) return prev;
+      const activity = getActivity(id);
+      const partner = activity.organisateur !== profile.prenom ? activity.organisateur : null;
+      const seed = [];
+      if (partner) {
+        seed.push({ author: "other", name: partner, text: `Hey ! Content(e) de t'avoir avec nous pour « ${activity.titre} » 🌺` });
+      } else {
+        seed.push({ author: "system", name: "Sòti MQ", text: "Tu as créé cette sortie — accueille les participants ici !" });
+      }
+      return { ...prev, [id]: seed };
+    });
+  }
+
+  function leaveActivity(id) {
+    setActivities((prev) => prev.map((a) => a.id === id ? { ...a, inscrits: a.inscrits.filter((n) => n !== profile.prenom) } : a));
+    setJoinedIds((prev) => prev.filter((i) => i !== id));
+  }
+
+  function publishActivity() {
+    const id = "u" + Date.now();
+    const newAct = {
+      id, titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
+      lieu: form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
+      description: form.description.trim() || "Aucune description fournie.",
+      organisateur: profile.prenom, inscrits: [profile.prenom],
+    };
+    setActivities((prev) => [newAct, ...prev]);
+    setJoinedIds((prev) => [...prev, id]);
+    setMessages((prev) => ({ ...prev, [id]: [{ author: "system", name: "Sòti MQ", text: "Sortie publiée ! Les membres intéressés vont recevoir une notification." }] }));
+    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "" });
+    setTab("fil");
+    setDetailId(id);
+  }
+
+  function sendMessage(id, text) {
+    if (!text.trim()) return;
+    setMessages((prev) => ({ ...prev, [id]: [...(prev[id] || []), { author: "me", name: profile.prenom, text: text.trim() }] }));
+    const activity = getActivity(id);
+    const partner = chatPartnerFor(activity);
+    setTimeout(() => {
+      const reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
+      setMessages((prev) => ({ ...prev, [id]: [...(prev[id] || []), { author: "other", name: partner, text: reply }] }));
+    }, 1100);
+  }
+
+  const formValid = form.titre && form.lieu && form.date && form.heure;
+
+  const filteredActivities = activities.filter((a) =>
+    (filterCat === "Toutes" || a.categorie === filterCat) &&
+    (filterCommune === "Toutes" || a.commune === filterCommune)
+  );
+
+  const myConversations = activities.filter((a) => joinedIds.includes(a.id));
+
+  /* ---------------------------------- RENDER ---------------------------------- */
+
+  return (
+    <div style={{
+      minHeight: "100vh", width: "100%", background: `linear-gradient(180deg, ${C.sable} 0%, ${C.sableDark} 100%)`,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: "28px 12px", boxSizing: "border-box",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+        * { box-sizing: border-box; }
+        ::-webkit-scrollbar { display: none; }
+        .scrollx { overflow-x: auto; scrollbar-width: none; }
+        .grow { animation: growIn .45s cubic-bezier(.2,.8,.2,1); }
+        @keyframes growIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+        .sheet { animation: slideUp .3s cubic-bezier(.2,.8,.2,1); }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        input:focus, textarea:focus, select:focus { outline: 2px solid ${C.lagonLight}; outline-offset: 1px; }
+        button:focus-visible { outline: 2px solid ${C.lagonLight}; outline-offset: 2px; }
+      `}</style>
+
+      {/* PHONE FRAME */}
+      <div style={{
+        width: 390, maxWidth: "100%", height: 812, maxHeight: "94vh", background: C.sable,
+        borderRadius: 40, boxShadow: "0 25px 70px rgba(14,20,17,0.35)", overflow: "hidden",
+        position: "relative", border: "10px solid " + C.encre, display: "flex", flexDirection: "column",
+      }}>
+        {/* status bar */}
+        <div style={{ height: 30, background: C.encre, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+          <div style={{ width: 90, height: 6, background: "#3A473F", borderRadius: 4 }} />
+        </div>
+
+        {screen === "onboarding" ? (
+          <Onboarding
+            obStep={obStep} setObStep={setObStep} profile={profile} setProfile={setProfile}
+            toggleInterest={toggleInterest} finishOnboarding={finishOnboarding}
+          />
+        ) : (
+          <>
+            {/* HEADER */}
+            <div style={{ background: C.lagon, padding: "14px 18px 0", flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 22, color: C.blanc, letterSpacing: 0.5 }}>
+                  Sòti <span style={{ color: C.soleil }}>MQ</span>
+                </div>
+                <button
+                  onClick={() => setShowBanner((s) => !s)}
+                  aria-label="Notifications"
+                  style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                >
+                  <Bell size={16} color={C.blanc} />
+                </button>
+              </div>
+              <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2, marginBottom: 12 }}>
+                {tab === "fil" && `Annou sòti, ${profile.prenom || "manzè/misye"} !`}
+                {tab === "creer" && "Propose ta sortie à la communauté"}
+                {tab === "messages" && "Tes conversations"}
+                {tab === "profil" && "Ton profil"}
+              </div>
+              <Wave color={C.sable} height={16} />
+            </div>
+
+            {/* CONTENT */}
+            <div style={{ flex: 1, overflowY: "auto", background: C.sable, position: "relative" }}>
+              {tab === "fil" && (
+                <FilTab
+                  activities={filteredActivities} joinedIds={joinedIds} onOpen={setDetailId}
+                  filterCat={filterCat} setFilterCat={setFilterCat}
+                  filterCommune={filterCommune} setFilterCommune={setFilterCommune}
+                  showBanner={showBanner} setShowBanner={setShowBanner}
+                />
+              )}
+              {tab === "creer" && (
+                <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} />
+              )}
+              {tab === "messages" && !chatId && (
+                <MessagesList conversations={myConversations} messages={messages} profile={profile} onOpen={setChatId} chatPartnerFor={chatPartnerFor} />
+              )}
+              {tab === "messages" && chatId && (
+                <ChatScreen
+                  activity={getActivity(chatId)} messages={messages[chatId] || []} profile={profile}
+                  onBack={() => setChatId(null)} onSend={(t) => sendMessage(chatId, t)} chatEndRef={chatEndRef}
+                />
+              )}
+              {tab === "profil" && (
+                <ProfilTab
+                  profile={profile} setProfile={setProfile} toggleInterest={toggleInterest}
+                  organisedCount={activities.filter((a) => a.organisateur === profile.prenom).length}
+                  joinedCount={joinedIds.length}
+                  onReset={() => { setScreen("onboarding"); setObStep(0); setJoinedIds([]); setMessages({}); setActivities(seedActivities()); setProfile({ prenom: "", commune: COMMUNES[0], interests: [] }); }}
+                />
+              )}
+
+              {detailId && (
+                <DetailSheet
+                  activity={getActivity(detailId)} joined={joinedIds.includes(detailId)}
+                  profile={profile} onClose={() => setDetailId(null)}
+                  onJoin={() => joinActivity(detailId)} onLeave={() => leaveActivity(detailId)}
+                  onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
+                />
+              )}
+            </div>
+
+            {/* BOTTOM TABS */}
+            <div style={{ display: "flex", borderTop: "1px solid " + C.sableDark, background: C.blanc, flexShrink: 0, paddingBottom: 6 }}>
+              <TabBtn icon={HomeIcon} label="Fil" active={tab === "fil"} onClick={() => { setTab("fil"); setChatId(null); }} />
+              <TabBtn icon={Plus} label="Créer" active={tab === "creer"} onClick={() => { setTab("creer"); setChatId(null); }} />
+              <TabBtn icon={MessageCircle} label="Messages" active={tab === "messages"} onClick={() => setTab("messages")} badge={myConversations.length} />
+              <TabBtn icon={User} label="Profil" active={tab === "profil"} onClick={() => { setTab("profil"); setChatId(null); }} />
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* --------------------------------- ONBOARDING --------------------------------- */
+
+function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, finishOnboarding }) {
+  return (
+    <div style={{ flex: 1, background: C.lagon, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "22px 26px 0" }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 30, color: C.blanc }}>
+          Sòti <span style={{ color: C.soleil }}>MQ</span>
+        </div>
+        <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
+          Annou sòti ! Trouve ta prochaine sortie amicale en Martinique.
+        </div>
+      </div>
+
+      <div style={{ flex: 1, background: C.sable, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: "24px 24px 20px", overflowY: "auto" }} className="grow" key={obStep}>
+        {obStep === 0 && (
+          <>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, marginBottom: 4 }}>Comment on t'appelle ?</div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960", marginBottom: 16 }}>Ton prénom sera visible par les autres membres.</div>
+            <input
+              value={profile.prenom}
+              onChange={(e) => setProfile((p) => ({ ...p, prenom: e.target.value }))}
+              placeholder="Ton prénom"
+              style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 15, background: C.blanc }}
+            />
+
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, margin: "22px 0 4px" }}>Ta commune</div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960", marginBottom: 12 }}>Pour te proposer des sorties près de chez toi.</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {COMMUNES.map((c) => (
+                <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
+              ))}
+            </div>
+          </>
+        )}
+
+        {obStep === 1 && (
+          <>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, marginBottom: 4 }}>Tes centres d'intérêt</div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960", marginBottom: 16 }}>Choisis-en au moins 3 pour recevoir des suggestions pertinentes.</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {CATEGORIES.map((c) => {
+                const Icon = c.icon;
+                const active = profile.interests.includes(c.id);
+                return (
+                  <button key={c.id} onClick={() => toggleInterest(c.id)} style={{
+                    display: "flex", alignItems: "center", gap: 7, padding: "10px 14px", borderRadius: 14,
+                    border: "1.5px solid " + (active ? c.color : C.sableDark), background: active ? c.color + "1A" : C.blanc,
+                    cursor: "pointer", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, color: C.encre,
+                  }}>
+                    <Icon size={16} color={c.color} /> {c.label}
+                    {active && <Check size={14} color={c.color} />}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div style={{ padding: "14px 24px 22px", background: C.sable, display: "flex", gap: 10 }}>
+        {obStep === 1 && (
+          <button onClick={() => setObStep(0)} style={{ padding: "13px 18px", borderRadius: 12, border: "1.5px solid " + C.sableDark, background: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, cursor: "pointer" }}>
+            Retour
+          </button>
+        )}
+        <button
+          disabled={obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3}
+          onClick={() => obStep === 0 ? setObStep(1) : finishOnboarding()}
+          style={{
+            flex: 1, padding: "13px 18px", borderRadius: 12, border: "none",
+            background: (obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) ? C.sableDark : C.corail,
+            color: (obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) ? "#8a8a7a" : C.blanc,
+            fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5,
+            cursor: (obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) ? "not-allowed" : "pointer",
+          }}
+        >
+          {obStep === 0 ? "Continuer" : "Annou allé ! →"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------- FIL TAB ----------------------------------- */
+
+function FilTab({ activities, joinedIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner }) {
+  return (
+    <div style={{ padding: "14px 18px 90px" }}>
+      {showBanner && (
+        <div style={{ background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 8, fontFamily: "'Work Sans', sans-serif", fontSize: 12 }}>
+          <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>Prototype de démonstration — les comptes, notifications et paiements ne sont pas réels.</div>
+          <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
+        </div>
+      )}
+
+      <div className="scrollx" style={{ display: "flex", gap: 8, marginBottom: 10, paddingBottom: 2 }}>
+        <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
+        {CATEGORIES.map((c) => (
+          <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
+        ))}
+      </div>
+      <div className="scrollx" style={{ display: "flex", gap: 8, marginBottom: 16, paddingBottom: 2 }}>
+        <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
+        {COMMUNES.map((c) => (
+          <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
+        ))}
+      </div>
+
+      {activities.length === 0 ? (
+        <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
+      ) : (
+        activities.map((a) => <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} onOpen={onOpen} />)
+      )}
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div style={{ textAlign: "center", padding: "50px 20px", color: "#5B6960" }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontSize: 17, fontWeight: 600, color: C.encre, marginBottom: 6 }}>Rien par ici pour l'instant</div>
+      <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, lineHeight: 1.5 }}>{text}</div>
+    </div>
+  );
+}
+
+/* --------------------------------- DETAIL SHEET --------------------------------- */
+
+function DetailSheet({ activity, joined, profile, onClose, onJoin, onLeave, onChat }) {
+  if (!activity) return null;
+  const cat = catById(activity.categorie);
+  const Icon = cat.icon;
+  const full = new Date(activity.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const isOwner = activity.organisateur === profile.prenom;
+  const full_capacity = activity.inscrits.length >= activity.places;
+
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 20 }}>
+      <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(30,42,36,0.45)" }} />
+      <div className="sheet" style={{
+        position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "88%", background: C.blanc,
+        borderTopLeftRadius: 26, borderTopRightRadius: 26, overflowY: "auto", padding: "10px 22px 24px",
+      }}>
+        <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 14px" }} />
+
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+          <div style={{ width: 36, height: 36, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <Icon size={18} color={C.blanc} />
+          </div>
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: cat.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{cat.label}</div>
+        </div>
+
+        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 23, color: C.encre, lineHeight: 1.15, marginBottom: 10 }}>{activity.titre}</div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, fontFamily: "'Work Sans', sans-serif", fontSize: 13.5, color: "#3E4A43" }}>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}><CalendarDays size={15} color={C.lagon} /> <span style={{ textTransform: "capitalize" }}>{full}</span> à {activity.heure}</div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}><MapPin size={15} color={C.lagon} /> {activity.lieu}, {activity.commune}</div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}><Users size={15} color={C.lagon} /> {activity.inscrits.length} / {activity.places} participants</div>
+        </div>
+
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 14, color: C.encre, lineHeight: 1.55, marginBottom: 16 }}>{activity.description}</div>
+
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          Organisé par
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+          <Avatar name={activity.organisateur} size={34} />
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
+        </div>
+
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          Participants
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+          {activity.inscrits.map((n) => (
+            <div key={n} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <Avatar name={n} size={26} /><span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5 }}>{n}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", gap: 10 }}>
+          {isOwner ? (
+            <button onClick={onChat} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
+              Discuter avec le groupe
+            </button>
+          ) : joined ? (
+            <>
+              <button onClick={onLeave} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "1.5px solid " + C.corail, background: C.blanc, color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Se désinscrire
+              </button>
+              <button onClick={onChat} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Discuter
+              </button>
+            </>
+          ) : (
+            <button
+              disabled={full_capacity}
+              onClick={onJoin}
+              style={{
+                flex: 1, padding: "14px", borderRadius: 14, border: "none",
+                background: full_capacity ? C.sableDark : C.corail, color: full_capacity ? "#8a8a7a" : C.blanc,
+                fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5,
+                cursor: full_capacity ? "not-allowed" : "pointer",
+              }}
+            >
+              {full_capacity ? "Complet — liste d'attente indisponible (démo)" : "Rejoindre la sortie"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------------- CREER TAB ----------------------------------- */
+
+function Field({ label, children }) {
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 7 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 14, background: C.blanc };
+
+function CreerTab({ form, setForm, onPublish, formValid }) {
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  return (
+    <div style={{ padding: "16px 18px 100px" }}>
+      <Field label="Titre de la sortie">
+        <input style={inputStyle} placeholder="Ex. Rando au Rocher du Diamant" value={form.titre} onChange={set("titre")} />
+      </Field>
+
+      <Field label="Catégorie">
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+          {CATEGORIES.map((c) => (
+            <Chip key={c.id} active={form.categorie === c.id} colorActive={c.color} onClick={() => setForm((f) => ({ ...f, categorie: c.id }))}>{c.label}</Chip>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Commune">
+        <div className="scrollx" style={{ display: "flex", gap: 8 }}>
+          {COMMUNES.map((c) => (
+            <Chip key={c} active={form.commune === c} onClick={() => setForm((f) => ({ ...f, commune: c }))}>{c}</Chip>
+          ))}
+        </div>
+      </Field>
+
+      <Field label="Lieu précis">
+        <input style={inputStyle} placeholder="Ex. Anse Dufour" value={form.lieu} onChange={set("lieu")} />
+      </Field>
+
+      <div style={{ display: "flex", gap: 12 }}>
+        <div style={{ flex: 1 }}>
+          <Field label="Date">
+            <input type="date" min="2026-07-17" style={inputStyle} value={form.date} onChange={set("date")} />
+          </Field>
+        </div>
+        <div style={{ flex: 1 }}>
+          <Field label="Heure">
+            <input type="time" style={inputStyle} value={form.heure} onChange={set("heure")} />
+          </Field>
+        </div>
+      </div>
+
+      <Field label="Nombre de places">
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <button onClick={() => setForm((f) => ({ ...f, places: Math.max(2, Number(f.places) - 1) }))} style={stepperBtn}>−</button>
+          <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 16, fontWeight: 700, minWidth: 24, textAlign: "center" }}>{form.places}</div>
+          <button onClick={() => setForm((f) => ({ ...f, places: Math.min(50, Number(f.places) + 1) }))} style={stepperBtn}>+</button>
+        </div>
+      </Field>
+
+      <Field label="Description">
+        <textarea style={{ ...inputStyle, resize: "none", minHeight: 90 }} placeholder="Explique le déroulé, ce qu'il faut prévoir..." value={form.description} onChange={set("description")} />
+      </Field>
+
+      <button
+        disabled={!formValid}
+        onClick={onPublish}
+        style={{
+          width: "100%", padding: "15px", borderRadius: 14, border: "none",
+          background: formValid ? C.corail : C.sableDark, color: formValid ? C.blanc : "#8a8a7a",
+          fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 15,
+          cursor: formValid ? "pointer" : "not-allowed", marginTop: 4,
+        }}
+      >
+        Publier la sortie
+      </button>
+    </div>
+  );
+}
+const stepperBtn = { width: 34, height: 34, borderRadius: "50%", border: "1.5px solid " + C.sableDark, background: C.blanc, fontSize: 18, fontWeight: 700, cursor: "pointer", color: C.encre };
+
+/* --------------------------------- MESSAGES --------------------------------- */
+
+function MessagesList({ conversations, messages, profile, onOpen, chatPartnerFor }) {
+  if (conversations.length === 0) {
+    return <div style={{ padding: "10px 18px" }}><EmptyState text="Pas encore de sortie rejointe. Direction le fil pour trouver ta prochaine sòti !" /></div>;
+  }
+  return (
+    <div style={{ padding: "10px 12px 90px" }}>
+      {conversations.map((a) => {
+        const msgs = messages[a.id] || [];
+        const last = msgs[msgs.length - 1];
+        const partner = chatPartnerFor(a);
+        return (
+          <div key={a.id} onClick={() => onOpen(a.id)} style={{
+            display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14,
+            cursor: "pointer",
+          }}>
+            <Avatar name={partner} size={44} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 15, color: C.encre }}>{a.titre}</div>
+              </div>
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                {last ? `${last.author === "me" ? "Toi : " : ""}${last.text}` : "Dis bonjour au groupe 👋"}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ChatScreen({ activity, messages, profile, onBack, onSend, chatEndRef }) {
+  const [text, setText] = useState("");
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "12px 16px", borderBottom: "1px solid " + C.sableDark, background: C.blanc }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", display: "flex" }}><ChevronLeft size={22} color={C.encre} /></button>
+        <div>
+          <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 15, color: C.encre }}>{activity.titre}</div>
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, color: "#5B6960" }}>{activity.inscrits.length} participant(s)</div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: "auto", padding: "14px 14px 8px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {messages.map((m, i) => (
+          <div key={i} style={{
+            alignSelf: m.author === "me" ? "flex-end" : m.author === "system" ? "center" : "flex-start",
+            maxWidth: "78%",
+          }}>
+            {m.author === "system" ? (
+              <div style={{ background: C.sableDark, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, padding: "6px 12px", borderRadius: 999, textAlign: "center" }}>{m.text}</div>
+            ) : (
+              <div>
+                {m.author === "other" && <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 10.5, color: "#5B6960", marginBottom: 2, marginLeft: 4 }}>{m.name}</div>}
+                <div style={{
+                  background: m.author === "me" ? C.lagon : C.blanc, color: m.author === "me" ? C.blanc : C.encre,
+                  padding: "9px 13px", borderRadius: 16, borderBottomRightRadius: m.author === "me" ? 4 : 16,
+                  borderBottomLeftRadius: m.author === "me" ? 16 : 4, fontFamily: "'Work Sans', sans-serif", fontSize: 13.5,
+                  boxShadow: "0 1px 3px rgba(30,42,36,0.08)", lineHeight: 1.4,
+                }}>{m.text}</div>
+              </div>
+            )}
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+
+      <div style={{ display: "flex", gap: 8, padding: "10px 14px 16px", borderTop: "1px solid " + C.sableDark, background: C.blanc }}>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && text.trim()) { onSend(text); setText(""); } }}
+          placeholder="Écris un message..."
+          style={{ flex: 1, padding: "11px 14px", borderRadius: 999, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 13.5 }}
+        />
+        <button
+          onClick={() => { if (text.trim()) { onSend(text); setText(""); } }}
+          style={{ width: 40, height: 40, borderRadius: "50%", border: "none", background: C.corail, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+        >
+          <Send size={16} color={C.blanc} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- PROFIL ---------------------------------- */
+
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onReset }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div style={{ padding: "18px 18px 90px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
+        <Avatar name={profile.prenom} size={62} />
+        <div style={{ flex: 1 }}>
+          {editing ? (
+            <input value={profile.prenom} onChange={(e) => setProfile((p) => ({ ...p, prenom: e.target.value }))} style={{ ...inputStyle, padding: "8px 10px", fontSize: 16, fontFamily: "'Fraunces', serif", fontWeight: 600 }} />
+          ) : (
+            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}</div>
+          )}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2 }}>
+            <MapPin size={13} /> {profile.commune}
+          </div>
+        </div>
+        <button onClick={() => setEditing((e) => !e)} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+          {editing ? <Check size={15} color={C.mangrove} /> : <Pencil size={14} color={C.encre} />}
+        </button>
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
+        <StatCard n={organisedCount} label="sorties organisées" />
+        <StatCard n={joinedCount} label="sorties rejointes" />
+      </div>
+
+      {editing && (
+        <Field label="Ta commune">
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {COMMUNES.map((c) => (
+              <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
+            ))}
+          </div>
+        </Field>
+      )}
+
+      <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+        Centres d'intérêt
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>
+        {CATEGORIES.map((c) => {
+          const Icon = c.icon;
+          const active = profile.interests.includes(c.id);
+          return (
+            <button key={c.id} onClick={() => editing && toggleInterest(c.id)} style={{
+              display: "flex", alignItems: "center", gap: 6, padding: "8px 12px", borderRadius: 12,
+              border: "1.5px solid " + (active ? c.color : C.sableDark), background: active ? c.color + "1A" : C.blanc,
+              cursor: editing ? "pointer" : "default", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12.5, color: C.encre,
+            }}>
+              <Icon size={14} color={c.color} /> {c.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <button onClick={onReset} style={{
+        width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.corail, background: C.blanc,
+        color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+      }}>
+        <LogOut size={15} /> Réinitialiser le prototype
+      </button>
+    </div>
+  );
+}
+
+function StatCard({ n, label }) {
+  return (
+    <div style={{ flex: 1, background: C.blanc, borderRadius: 14, padding: "14px 12px", textAlign: "center", border: "1px solid " + C.sableDark }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 24, color: C.lagon }}>{n}</div>
+      <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11, color: "#5B6960", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+/* ---------------------------------- TAB BAR ---------------------------------- */
+
+function TabBtn({ icon: Icon, label, active, onClick, badge }) {
+  return (
+    <button onClick={onClick} style={{
+      flex: 1, background: "none", border: "none", cursor: "pointer", padding: "10px 4px 4px",
+      display: "flex", flexDirection: "column", alignItems: "center", gap: 3, position: "relative",
+    }}>
+      <Icon size={20} color={active ? C.lagon : "#9AA69E"} strokeWidth={active ? 2.4 : 2} />
+      <span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 10, fontWeight: active ? 700 : 500, color: active ? C.lagon : "#9AA69E" }}>{label}</span>
+      {!!badge && (
+        <div style={{ position: "absolute", top: 4, right: "28%", background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 9, fontWeight: 700, minWidth: 15, height: 15, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
+          {badge}
+        </div>
+      )}
+    </button>
+  );
+}
+
+createRoot(document.getElementById("root")).render(<SotiMQ />);
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
