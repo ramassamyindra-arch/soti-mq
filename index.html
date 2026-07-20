@@ -492,6 +492,9 @@ function SotiMQ() {
         <div style={{ height: 30, background: C.encre, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
           <div style={{ width: 90, height: 6, background: "#3A473F", borderRadius: 4 }} />
         </div>
+        <div style={{ fontSize: 9, fontFamily: "monospace", background: "yellow", padding: 2, wordBreak: "break-all" }}>
+          DEBUG session={JSON.stringify(session === undefined ? "undefined" : session)} profileChecked={String(profileChecked)} profile={JSON.stringify(profile)}
+        </div>
 
         {session === undefined || (session && !profileChecked) ? (
           <LoadingScreen />
