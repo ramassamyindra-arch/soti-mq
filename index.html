@@ -21,7 +21,8 @@
     "react": "https://esm.sh/react@18.3.1",
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "lucide-react": "https://esm.sh/lucide-react@0.462.0?external=react"
+    "lucide-react": "https://esm.sh/lucide-react@0.462.0?external=react",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
   }
 }
 </script>
@@ -37,6 +38,12 @@ import {
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
   Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+
+const supabase = createClient(
+  "https://uzdcgvpsbbpdkbotemts.supabase.co",
+  "sb_publishable_LqS5f-h5yCFxz_2vYfoAzQ_ABCwXqIM"
+);
 
 /* ---------------------------------- THEME ---------------------------------- */
 const C = {
@@ -66,62 +73,6 @@ const COMMUNES = [
   "Fort-de-France", "Le Lamentin", "Schoelcher", "Saint-Joseph", "Ducos",
   "Rivière-Salée", "Sainte-Anne", "Le Marin", "Trinité", "Le Robert",
 ];
-
-const REPLIES = [
-  "Avec plaisir ! On se retrouve là-bas 😊",
-  "Nickel, à tout à l'heure !",
-  "Super, hâte d'y être 🙌",
-  "Ok reçu, je préviens les autres.",
-  "Parfait, n'oublie pas ta bouteille d'eau !",
-  "On sera plusieurs, ça va être une belle sòti 🌺",
-];
-
-function seedActivities() {
-  return [
-    {
-      id: "a1", titre: "Bain de mer & coucher de soleil",
-      categorie: "plage", commune: "Sainte-Anne", lieu: "Plage des Salines",
-      date: "2026-07-19", heure: "17:00", places: 10,
-      description: "On se pose sur le sable, petite baignade, et on regarde le soleil descendre. Chacun ramène quelque chose à grignoter si le cœur lui en dit.",
-      organisateur: "Nadia", inscrits: ["Nadia", "Kevin", "Sarah"],
-    },
-    {
-      id: "a2", titre: "Rando Cascade Didier",
-      categorie: "rando", commune: "Fort-de-France", lieu: "Cascade Didier",
-      date: "2026-07-20", heure: "08:30", places: 8,
-      description: "Balade tranquille en forêt jusqu'à la cascade, environ 1h30 aller-retour. Prévoir de bonnes chaussures et de l'eau.",
-      organisateur: "Manu", inscrits: ["Manu", "Léa"],
-    },
-    {
-      id: "a3", titre: "Volley plage entre potes",
-      categorie: "sport", commune: "Le Robert", lieu: "Anse Mabouya",
-      date: "2026-07-18", heure: "16:00", places: 12,
-      description: "Deux équipes, ambiance décontractée, tous niveaux bienvenus. On tape la balle jusqu'au coucher de soleil.",
-      organisateur: "Steevy", inscrits: ["Steevy", "Aurélie", "Jonas", "Cindy"],
-    },
-    {
-      id: "a4", titre: "Apéro-dînatoire quartier",
-      categorie: "apero", commune: "Schoelcher", lieu: "Chez Mickaëlle, Terreville",
-      date: "2026-07-21", heure: "19:30", places: 8,
-      description: "Chacun ramène un petit plat ou une boisson. Musique, bonne humeur, on fait connaissance autour de la table.",
-      organisateur: "Mickaëlle", inscrits: ["Mickaëlle"],
-    },
-    {
-      id: "a5", titre: "Marché nocturne & lolos",
-      categorie: "culture", commune: "Le Lamentin", lieu: "Place du marché",
-      date: "2026-07-22", heure: "18:30", places: 15,
-      description: "Découverte du marché du soir, on grignote dans les lolos et on discute. Idéal pour les nouveaux arrivants sur la commune.",
-      organisateur: "Fabien", inscrits: ["Fabien", "Océane"],
-    },
-    {
-      id: "a6", titre: "Sortie kayak Baie des Anglais",
-      categorie: "nautisme", commune: "Le Marin", lieu: "Baie des Anglais",
-      date: "2026-07-25", heure: "09:00", places: 6,
-      description: "Location groupée de kayaks, sortie de 2h le long de la mangrove. Débutants acceptés, encadrement souple.",
-      organisateur: "Yohann", inscrits: ["Yohann", "Priscilla", "Dan"],
-    },
-  ];
-}
 
 /* ------------------------------- SOUS-COMPOSANTS ------------------------------- */
 
@@ -234,16 +185,109 @@ function TicketCard({ activity, joined, onOpen }) {
   );
 }
 
+/* ---------------------------------- AUTH ---------------------------------- */
+
+function LoadingScreen() {
+  return (
+    <div style={{ flex: 1, background: C.lagon, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 13.5 }}>Chargement…</div>
+    </div>
+  );
+}
+
+function AuthScreen() {
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function submit() {
+    setError(""); setInfo(""); setLoading(true);
+    try {
+      if (mode === "signup") {
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+        if (!data.session) {
+          setInfo("Compte créé ! Vérifie ta boîte mail pour confirmer ton adresse, puis connecte-toi.");
+          setMode("login");
+        }
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+    } catch (e) {
+      setError(e.message || "Une erreur est survenue.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  const disabled = !email || !password || loading;
+
+  return (
+    <div style={{ flex: 1, background: C.lagon, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+      <div style={{ padding: "22px 26px 0" }}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 30, color: C.blanc }}>
+          Sòti <span style={{ color: C.soleil }}>MQ</span>
+        </div>
+        <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
+          Annou sòti ! Trouve ta prochaine sortie amicale en Martinique.
+        </div>
+      </div>
+      <div style={{ flex: 1, background: C.sable, borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: "24px 24px 20px", overflowY: "auto" }} className="grow" key={mode}>
+        <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, marginBottom: 16 }}>
+          {mode === "login" ? "Connexion" : "Créer un compte"}
+        </div>
+        <Field label="E-mail">
+          <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="toi@exemple.com" style={inputStyle} />
+        </Field>
+        <Field label="Mot de passe">
+          <input
+            type="password" autoComplete={mode === "login" ? "current-password" : "new-password"}
+            value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" style={inputStyle}
+            onKeyDown={(e) => { if (e.key === "Enter" && !disabled) submit(); }}
+          />
+        </Field>
+        {error && <div style={{ color: C.corail, fontFamily: "'Work Sans', sans-serif", fontSize: 13, marginBottom: 12 }}>{error}</div>}
+        {info && <div style={{ color: C.mangrove, fontFamily: "'Work Sans', sans-serif", fontSize: 13, marginBottom: 12 }}>{info}</div>}
+        <button
+          disabled={disabled}
+          onClick={submit}
+          style={{
+            width: "100%", padding: "13px 18px", borderRadius: 12, border: "none",
+            background: disabled ? C.sableDark : C.corail, color: disabled ? "#8a8a7a" : C.blanc,
+            fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5,
+            cursor: disabled ? "not-allowed" : "pointer", marginTop: 4,
+          }}
+        >
+          {loading ? "..." : mode === "login" ? "Se connecter" : "Créer mon compte"}
+        </button>
+        <button
+          onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
+          style={{ width: "100%", padding: "12px", background: "none", border: "none", fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: C.lagon, cursor: "pointer", marginTop: 8, fontWeight: 600 }}
+        >
+          {mode === "login" ? "Pas encore de compte ? Créer un compte" : "Déjà un compte ? Se connecter"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------------------------------- APP ---------------------------------- */
 
 function SotiMQ() {
-  const [screen, setScreen] = useState("onboarding"); // onboarding | app
+  const [session, setSession] = useState(undefined); // undefined = loading, null = signed out
+  const [profile, setProfile] = useState(null);
+  const [profileChecked, setProfileChecked] = useState(false);
   const [obStep, setObStep] = useState(0);
-  const [profile, setProfile] = useState({ prenom: "", commune: COMMUNES[0], interests: [] });
+  const [obDraft, setObDraft] = useState({ prenom: "", commune: COMMUNES[0], interests: [] });
 
-  const [activities, setActivities] = useState(seedActivities());
-  const [joinedIds, setJoinedIds] = useState([]);
-  const [messages, setMessages] = useState({}); // { activityId: [{author,name,text}] }
+  const [activitiesRaw, setActivitiesRaw] = useState([]);
+  const [participations, setParticipations] = useState([]);
+  const [profilesById, setProfilesById] = useState({});
+  const [chatMessages, setChatMessages] = useState([]);
 
   const [tab, setTab] = useState("fil");
   const [filterCat, setFilterCat] = useState("Toutes");
@@ -260,81 +304,147 @@ function SotiMQ() {
   const chatEndRef = useRef(null);
   useEffect(() => {
     if (chatId) chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, chatId]);
+  }, [chatMessages, chatId]);
+
+  /* ---------- auth ---------- */
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  /* ---------- profile ---------- */
+  useEffect(() => {
+    if (!session) { setProfile(null); setProfileChecked(false); return; }
+    let cancelled = false;
+    setProfileChecked(false);
+    supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle().then(({ data }) => {
+      if (cancelled) return;
+      setProfile(data || null);
+      setProfileChecked(true);
+      if (!data) { setObDraft({ prenom: "", commune: COMMUNES[0], interests: [] }); setObStep(0); }
+    });
+    return () => { cancelled = true; };
+  }, [session]);
+
+  /* ---------- data: activities + participations + profiles ---------- */
+  async function refreshCommunity() {
+    const [{ data: acts }, { data: parts }, { data: profs }] = await Promise.all([
+      supabase.from("activities").select("*").order("date", { ascending: true }),
+      supabase.from("participations").select("*"),
+      supabase.from("profiles").select("id, prenom, commune, interests"),
+    ]);
+    setActivitiesRaw(acts || []);
+    setParticipations(parts || []);
+    const map = {};
+    (profs || []).forEach((p) => { map[p.id] = p; });
+    setProfilesById(map);
+  }
+
+  useEffect(() => {
+    if (!session || !profile) return;
+    refreshCommunity();
+    const channel = supabase
+      .channel("community-changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, refreshCommunity)
+      .on("postgres_changes", { event: "*", schema: "public", table: "participations" }, refreshCommunity)
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [session, profile]);
+
+  /* ---------- chat realtime ---------- */
+  useEffect(() => {
+    if (!chatId) { setChatMessages([]); return; }
+    let cancelled = false;
+    supabase.from("messages").select("*").eq("activity_id", chatId).order("created_at", { ascending: true })
+      .then(({ data }) => { if (!cancelled) setChatMessages(data || []); });
+    const channel = supabase
+      .channel("messages-" + chatId)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages", filter: `activity_id=eq.${chatId}` }, (payload) => {
+        setChatMessages((prev) => [...prev, payload.new]);
+      })
+      .subscribe();
+    return () => { cancelled = true; supabase.removeChannel(channel); };
+  }, [chatId]);
 
   /* ---------- helpers ---------- */
-  const getActivity = (id) => activities.find((a) => a.id === id);
+  const prenomOf = (id) => (profilesById[id] && profilesById[id].prenom) || "Membre";
 
-  const chatPartnerFor = (activity) => {
-    if (!activity) return "Le groupe";
-    if (activity.organisateur !== profile.prenom) return activity.organisateur;
-    return activity.inscrits.find((n) => n !== profile.prenom) || "un participant";
-  };
+  const activities = activitiesRaw.map((a) => {
+    const parts = participations.filter((p) => p.activity_id === a.id);
+    return {
+      ...a,
+      organisateur: prenomOf(a.organisateur_id),
+      inscrits: parts.map((p) => prenomOf(p.user_id)),
+      inscrits_ids: parts.map((p) => p.user_id),
+    };
+  });
+
+  const getActivity = (id) => activities.find((a) => a.id === id);
+  const joinedIds = session ? participations.filter((p) => p.user_id === session.user.id).map((p) => p.activity_id) : [];
 
   function toggleInterest(id) {
+    setObDraft((p) => ({
+      ...p,
+      interests: p.interests.includes(id) ? p.interests.filter((i) => i !== id) : [...p.interests, id],
+    }));
+  }
+
+  function toggleProfileInterest(id) {
     setProfile((p) => ({
       ...p,
       interests: p.interests.includes(id) ? p.interests.filter((i) => i !== id) : [...p.interests, id],
     }));
   }
 
-  function finishOnboarding() {
-    setScreen("app");
-    setTab("fil");
+  async function finishOnboarding() {
+    if (!obDraft.prenom.trim()) return;
+    const { data, error } = await supabase.from("profiles").insert({
+      id: session.user.id, prenom: obDraft.prenom.trim(), commune: obDraft.commune, interests: obDraft.interests,
+    }).select().single();
+    if (!error) { setProfile(data); setTab("fil"); }
   }
 
-  function joinActivity(id) {
-    setActivities((prev) => prev.map((a) => {
-      if (a.id !== id) return a;
-      if (a.inscrits.includes(profile.prenom)) return a;
-      if (a.inscrits.length >= a.places) return a;
-      return { ...a, inscrits: [...a.inscrits, profile.prenom] };
-    }));
-    setJoinedIds((prev) => [...new Set([...prev, id])]);
-    setMessages((prev) => {
-      if (prev[id]) return prev;
-      const activity = getActivity(id);
-      const partner = activity.organisateur !== profile.prenom ? activity.organisateur : null;
-      const seed = [];
-      if (partner) {
-        seed.push({ author: "other", name: partner, text: `Hey ! Content(e) de t'avoir avec nous pour « ${activity.titre} » 🌺` });
-      } else {
-        seed.push({ author: "system", name: "Sòti MQ", text: "Tu as créé cette sortie — accueille les participants ici !" });
-      }
-      return { ...prev, [id]: seed };
-    });
+  async function saveProfile() {
+    if (!profile) return;
+    await supabase.from("profiles").update({
+      prenom: profile.prenom, commune: profile.commune, interests: profile.interests,
+    }).eq("id", profile.id);
   }
 
-  function leaveActivity(id) {
-    setActivities((prev) => prev.map((a) => a.id === id ? { ...a, inscrits: a.inscrits.filter((n) => n !== profile.prenom) } : a));
-    setJoinedIds((prev) => prev.filter((i) => i !== id));
+  async function joinActivity(id) {
+    await supabase.from("participations").insert({ activity_id: id, user_id: session.user.id });
+    refreshCommunity();
   }
 
-  function publishActivity() {
-    const id = "u" + Date.now();
-    const newAct = {
-      id, titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
+  async function leaveActivity(id) {
+    await supabase.from("participations").delete().eq("activity_id", id).eq("user_id", session.user.id);
+    refreshCommunity();
+  }
+
+  async function publishActivity() {
+    const { data: newAct, error } = await supabase.from("activities").insert({
+      organisateur_id: session.user.id,
+      titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
       lieu: form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
       description: form.description.trim() || "Aucune description fournie.",
-      organisateur: profile.prenom, inscrits: [profile.prenom],
-    };
-    setActivities((prev) => [newAct, ...prev]);
-    setJoinedIds((prev) => [...prev, id]);
-    setMessages((prev) => ({ ...prev, [id]: [{ author: "system", name: "Sòti MQ", text: "Sortie publiée ! Les membres intéressés vont recevoir une notification." }] }));
+    }).select().single();
+    if (error || !newAct) return;
+    await supabase.from("participations").insert({ activity_id: newAct.id, user_id: session.user.id });
+    await refreshCommunity();
     setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "" });
     setTab("fil");
-    setDetailId(id);
+    setDetailId(newAct.id);
   }
 
-  function sendMessage(id, text) {
+  async function sendMessage(id, text) {
     if (!text.trim()) return;
-    setMessages((prev) => ({ ...prev, [id]: [...(prev[id] || []), { author: "me", name: profile.prenom, text: text.trim() }] }));
-    const activity = getActivity(id);
-    const partner = chatPartnerFor(activity);
-    setTimeout(() => {
-      const reply = REPLIES[Math.floor(Math.random() * REPLIES.length)];
-      setMessages((prev) => ({ ...prev, [id]: [...(prev[id] || []), { author: "other", name: partner, text: reply }] }));
-    }, 1100);
+    await supabase.from("messages").insert({ activity_id: id, author_id: session.user.id, content: text.trim() });
+  }
+
+  async function signOut() {
+    setDetailId(null); setChatId(null); setTab("fil");
+    await supabase.auth.signOut();
   }
 
   const formValid = form.titre && form.lieu && form.date && form.heure;
@@ -345,6 +455,12 @@ function SotiMQ() {
   );
 
   const myConversations = activities.filter((a) => joinedIds.includes(a.id));
+  const organisedCount = profile ? activities.filter((a) => a.organisateur_id === profile.id).length : 0;
+  const chatDisplayMessages = chatMessages.map((m) => ({
+    author: m.author_id === session?.user?.id ? "me" : "other",
+    name: prenomOf(m.author_id),
+    text: m.content,
+  }));
 
   /* ---------------------------------- RENDER ---------------------------------- */
 
@@ -377,9 +493,13 @@ function SotiMQ() {
           <div style={{ width: 90, height: 6, background: "#3A473F", borderRadius: 4 }} />
         </div>
 
-        {screen === "onboarding" ? (
+        {session === undefined || (session && !profileChecked) ? (
+          <LoadingScreen />
+        ) : !session ? (
+          <AuthScreen />
+        ) : !profile ? (
           <Onboarding
-            obStep={obStep} setObStep={setObStep} profile={profile} setProfile={setProfile}
+            obStep={obStep} setObStep={setObStep} profile={obDraft} setProfile={setObDraft}
             toggleInterest={toggleInterest} finishOnboarding={finishOnboarding}
           />
         ) : (
@@ -421,27 +541,28 @@ function SotiMQ() {
                 <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} />
               )}
               {tab === "messages" && !chatId && (
-                <MessagesList conversations={myConversations} messages={messages} profile={profile} onOpen={setChatId} chatPartnerFor={chatPartnerFor} />
+                <MessagesList conversations={myConversations} onOpen={setChatId} />
               )}
               {tab === "messages" && chatId && (
                 <ChatScreen
-                  activity={getActivity(chatId)} messages={messages[chatId] || []} profile={profile}
+                  activity={getActivity(chatId)} messages={chatDisplayMessages}
                   onBack={() => setChatId(null)} onSend={(t) => sendMessage(chatId, t)} chatEndRef={chatEndRef}
                 />
               )}
               {tab === "profil" && (
                 <ProfilTab
-                  profile={profile} setProfile={setProfile} toggleInterest={toggleInterest}
-                  organisedCount={activities.filter((a) => a.organisateur === profile.prenom).length}
+                  profile={profile} setProfile={setProfile} toggleInterest={toggleProfileInterest}
+                  organisedCount={organisedCount}
                   joinedCount={joinedIds.length}
-                  onReset={() => { setScreen("onboarding"); setObStep(0); setJoinedIds([]); setMessages({}); setActivities(seedActivities()); setProfile({ prenom: "", commune: COMMUNES[0], interests: [] }); }}
+                  onSave={saveProfile}
+                  onSignOut={signOut}
                 />
               )}
 
               {detailId && (
                 <DetailSheet
                   activity={getActivity(detailId)} joined={joinedIds.includes(detailId)}
-                  profile={profile} onClose={() => setDetailId(null)}
+                  myId={profile.id} onClose={() => setDetailId(null)}
                   onJoin={() => joinActivity(detailId)} onLeave={() => leaveActivity(detailId)}
                   onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
                 />
@@ -554,7 +675,7 @@ function FilTab({ activities, joinedIds, onOpen, filterCat, setFilterCat, filter
       {showBanner && (
         <div style={{ background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 8, fontFamily: "'Work Sans', sans-serif", fontSize: 12 }}>
           <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ flex: 1 }}>Prototype de démonstration — les comptes, notifications et paiements ne sont pas réels.</div>
+          <div style={{ flex: 1 }}>Version de test connectée en direct — comptes et sorties sont réels. Notifications à venir.</div>
           <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
         </div>
       )}
@@ -592,12 +713,12 @@ function EmptyState({ text }) {
 
 /* --------------------------------- DETAIL SHEET --------------------------------- */
 
-function DetailSheet({ activity, joined, profile, onClose, onJoin, onLeave, onChat }) {
+function DetailSheet({ activity, joined, myId, onClose, onJoin, onLeave, onChat }) {
   if (!activity) return null;
   const cat = catById(activity.categorie);
   const Icon = cat.icon;
   const full = new Date(activity.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
-  const isOwner = activity.organisateur === profile.prenom;
+  const isOwner = activity.organisateur_id === myId;
   const full_capacity = activity.inscrits.length >= activity.places;
 
   return (
@@ -763,33 +884,26 @@ const stepperBtn = { width: 34, height: 34, borderRadius: "50%", border: "1.5px 
 
 /* --------------------------------- MESSAGES --------------------------------- */
 
-function MessagesList({ conversations, messages, profile, onOpen, chatPartnerFor }) {
+function MessagesList({ conversations, onOpen }) {
   if (conversations.length === 0) {
     return <div style={{ padding: "10px 18px" }}><EmptyState text="Pas encore de sortie rejointe. Direction le fil pour trouver ta prochaine sòti !" /></div>;
   }
   return (
     <div style={{ padding: "10px 12px 90px" }}>
-      {conversations.map((a) => {
-        const msgs = messages[a.id] || [];
-        const last = msgs[msgs.length - 1];
-        const partner = chatPartnerFor(a);
-        return (
-          <div key={a.id} onClick={() => onOpen(a.id)} style={{
-            display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14,
-            cursor: "pointer",
-          }}>
-            <Avatar name={partner} size={44} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 15, color: C.encre }}>{a.titre}</div>
-              </div>
-              <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                {last ? `${last.author === "me" ? "Toi : " : ""}${last.text}` : "Dis bonjour au groupe 👋"}
-              </div>
+      {conversations.map((a) => (
+        <div key={a.id} onClick={() => onOpen(a.id)} style={{
+          display: "flex", alignItems: "center", gap: 12, padding: "12px 10px", borderRadius: 14,
+          cursor: "pointer",
+        }}>
+          <Avatar name={a.organisateur} size={44} />
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 15, color: C.encre }}>{a.titre}</div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960" }}>
+              {a.inscrits.length} participant(s) · Voir la conversation
             </div>
           </div>
-        );
-      })}
+        </div>
+      ))}
     </div>
   );
 }
@@ -851,7 +965,7 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, chatEndRef })
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onReset }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut }) {
   const [editing, setEditing] = useState(false);
   return (
     <div style={{ padding: "18px 18px 90px" }}>
@@ -867,7 +981,7 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
             <MapPin size={13} /> {profile.commune}
           </div>
         </div>
-        <button onClick={() => setEditing((e) => !e)} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <button onClick={() => { if (editing) onSave(); setEditing((e) => !e); }} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
           {editing ? <Check size={15} color={C.mangrove} /> : <Pencil size={14} color={C.encre} />}
         </button>
       </div>
@@ -906,12 +1020,12 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
         })}
       </div>
 
-      <button onClick={onReset} style={{
+      <button onClick={onSignOut} style={{
         width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.corail, background: C.blanc,
         color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
       }}>
-        <LogOut size={15} /> Réinitialiser le prototype
+        <LogOut size={15} /> Se déconnecter
       </button>
     </div>
   );
