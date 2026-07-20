@@ -961,6 +961,12 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, chatEndRef })
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
 
+  useEffect(() => {
+    if (!activity) onBack();
+  }, [activity]);
+
+  if (!activity) return null;
+
   async function submit() {
     const value = text.trim();
     if (!value || sending) return;
