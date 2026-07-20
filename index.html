@@ -488,6 +488,32 @@ function SotiMQ() {
     await supabase.auth.signOut();
   }
 
+  async function deleteAccount() {
+    setBusyAction(true); setActionError("");
+    const uid = session.user.id;
+    const steps = [
+      supabase.from("messages").delete().eq("author_id", uid),
+      supabase.from("participations").delete().eq("user_id", uid),
+      supabase.from("activities").delete().eq("organisateur_id", uid),
+    ];
+    const results = await Promise.all(steps);
+    const stepError = results.find((r) => r.error);
+    if (stepError) {
+      setActionError("Suppression incomplète : " + stepError.error.message);
+      setBusyAction(false);
+      return;
+    }
+    const { error: profileError } = await supabase.from("profiles").delete().eq("id", uid);
+    if (profileError) {
+      setActionError("Suppression incomplète : " + profileError.message);
+      setBusyAction(false);
+      return;
+    }
+    setDetailId(null); setChatId(null); setTab("fil");
+    await supabase.auth.signOut();
+    setBusyAction(false);
+  }
+
   const formValid = form.titre && form.lieu && form.date && form.heure;
 
   const filteredActivities = activities.filter((a) =>
@@ -606,6 +632,8 @@ function SotiMQ() {
                   joinedCount={joinedIds.length}
                   onSave={saveProfile}
                   onSignOut={signOut}
+                  onDeleteAccount={deleteAccount}
+                  busy={busyAction}
                 />
               )}
 
@@ -1057,8 +1085,9 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, chatEndRef })
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, busy }) {
   const [editing, setEditing] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <div style={{ padding: "18px 18px 90px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
@@ -1115,10 +1144,46 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
       <button onClick={onSignOut} style={{
         width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.corail, background: C.blanc,
         color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 24,
       }}>
         <LogOut size={15} /> Se déconnecter
       </button>
+
+      <div style={{ borderTop: "1px solid " + C.sableDark, paddingTop: 18 }}>
+        {!confirmingDelete ? (
+          <button onClick={() => setConfirmingDelete(true)} style={{
+            width: "100%", padding: "10px", background: "none", border: "none",
+            color: "#8a4a4a", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
+          }}>
+            Supprimer mon compte
+          </button>
+        ) : (
+          <div style={{ background: "#FBE4DC", border: "1px solid " + C.corail, borderRadius: 12, padding: "14px 16px" }}>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: C.corail, marginBottom: 12, lineHeight: 1.5 }}>
+              Cette action est irréversible : ton profil, tes sorties organisées, tes participations et tes messages seront définitivement supprimés.
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setConfirmingDelete(false)} disabled={busy} style={{
+                flex: 1, padding: "10px", borderRadius: 10, border: "1.5px solid " + C.sableDark, background: C.blanc,
+                fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12.5, cursor: "pointer",
+              }}>
+                Annuler
+              </button>
+              <button onClick={onDeleteAccount} disabled={busy} style={{
+                flex: 1, padding: "10px", borderRadius: 10, border: "none", background: C.corail, color: C.blanc,
+                fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1,
+              }}>
+                {busy ? "Suppression..." : "Confirmer la suppression"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 20 }}>
+        <a href="./cgu.html" target="_blank" rel="noopener" style={{ color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 11.5 }}>CGU</a>
+        <a href="./confidentialite.html" target="_blank" rel="noopener" style={{ color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 11.5 }}>Confidentialité</a>
+      </div>
     </div>
   );
 }
