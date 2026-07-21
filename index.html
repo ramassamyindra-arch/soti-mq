@@ -197,6 +197,25 @@ function LoadingScreen() {
   );
 }
 
+function SuspendedScreen({ statut, onSignOut }) {
+  const isBanned = statut === "banni";
+  return (
+    <div style={{ flex: 1, background: C.lagon, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "0 32px", textAlign: "center" }}>
+      <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 22, color: C.blanc, marginBottom: 10 }}>
+        {isBanned ? "Compte banni" : "Compte suspendu"}
+      </div>
+      <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 13.5, lineHeight: 1.6, marginBottom: 22 }}>
+        {isBanned
+          ? "Ton compte a été définitivement banni suite à un signalement traité par l'équipe de modération."
+          : "Ton compte a été temporairement suspendu suite à un signalement en cours d'examen."}
+      </div>
+      <button onClick={onSignOut} style={{ padding: "12px 20px", borderRadius: 12, border: "1.5px solid " + C.blanc, background: "none", color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, cursor: "pointer" }}>
+        Se déconnecter
+      </button>
+    </div>
+  );
+}
+
 function AuthScreen() {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -576,6 +595,8 @@ function SotiMQ() {
             obStep={obStep} setObStep={setObStep} profile={obDraft} setProfile={setObDraft}
             toggleInterest={toggleInterest} finishOnboarding={finishOnboarding}
           />
+        ) : profile.statut !== "actif" ? (
+          <SuspendedScreen statut={profile.statut} onSignOut={signOut} />
         ) : (
           <>
             {/* HEADER */}
@@ -597,6 +618,7 @@ function SotiMQ() {
                 {tab === "creer" && "Propose ta sortie à la communauté"}
                 {tab === "messages" && "Tes conversations"}
                 {tab === "profil" && "Ton profil"}
+                {tab === "moderation" && "Modération — signalements"}
               </div>
               <Wave color={C.sable} height={16} />
             </div>
@@ -642,9 +664,11 @@ function SotiMQ() {
                   onSave={saveProfile}
                   onSignOut={signOut}
                   onDeleteAccount={deleteAccount}
+                  onOpenModeration={() => setTab("moderation")}
                   busy={busyAction}
                 />
               )}
+              {tab === "moderation" && profile.is_admin && <ModerationTab onBack={() => setTab("profil")} />}
 
               {detailId && (
                 <DetailSheet
@@ -1180,7 +1204,7 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, busy }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, busy }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
@@ -1236,6 +1260,16 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
         })}
       </div>
 
+      {profile.is_admin && (
+        <button onClick={onOpenModeration} style={{
+          width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.lagon, background: C.blanc,
+          color: C.lagon, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+          display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 12,
+        }}>
+          <Users size={15} /> Modération
+        </button>
+      )}
+
       <button onClick={onSignOut} style={{
         width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.corail, background: C.blanc,
         color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
@@ -1290,6 +1324,128 @@ function StatCard({ n, label }) {
       <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11, color: "#5B6960", marginTop: 2 }}>{label}</div>
     </div>
   );
+}
+
+/* ---------------------------------- MODERATION ---------------------------------- */
+
+const STATUT_LABELS = { nouveau: "Nouveau", traite: "Traité", classe_sans_suite: "Classé sans suite" };
+const STATUT_COMPTE_LABELS = { actif: "Actif", suspendu: "Suspendu", banni: "Banni" };
+
+function ModerationTab({ onBack }) {
+  const [reports, setReports] = useState(null);
+  const [activitiesById, setActivitiesById] = useState({});
+  const [profilesById, setProfilesById] = useState({});
+  const [error, setError] = useState("");
+  const [busyId, setBusyId] = useState(null);
+
+  async function load() {
+    setError("");
+    const { data: reportsData, error: reportsError } = await supabase
+      .from("reports").select("*").order("created_at", { ascending: false });
+    if (reportsError) { setError(reportsError.message); return; }
+    setReports(reportsData || []);
+
+    const activityIds = [...new Set((reportsData || []).filter((r) => r.cible_type === "activite").map((r) => r.cible_id))];
+    if (activityIds.length === 0) { setActivitiesById({}); setProfilesById({}); return; }
+
+    const { data: activitiesData } = await supabase.from("activities").select("*").in("id", activityIds);
+    const actMap = {};
+    (activitiesData || []).forEach((a) => { actMap[a.id] = a; });
+    setActivitiesById(actMap);
+
+    const organisateurIds = [...new Set((activitiesData || []).map((a) => a.organisateur_id))];
+    if (organisateurIds.length > 0) {
+      const { data: profilesData } = await supabase.from("profiles").select("id, prenom, statut").in("id", organisateurIds);
+      const profMap = {};
+      (profilesData || []).forEach((p) => { profMap[p.id] = p; });
+      setProfilesById(profMap);
+    }
+  }
+
+  useEffect(() => { load(); }, []);
+
+  async function setReportStatut(reportId, statut) {
+    setBusyId(reportId);
+    const { error: err } = await supabase.from("reports").update({ statut }).eq("id", reportId);
+    if (err) setError(err.message);
+    else setReports((prev) => prev.map((r) => (r.id === reportId ? { ...r, statut } : r)));
+    setBusyId(null);
+  }
+
+  async function setUserStatut(userId, statut) {
+    setBusyId(userId);
+    const { error: err } = await supabase.from("profiles").update({ statut }).eq("id", userId);
+    if (err) setError(err.message);
+    else setProfilesById((prev) => ({ ...prev, [userId]: { ...prev[userId], statut } }));
+    setBusyId(null);
+  }
+
+  return (
+    <div style={{ padding: "14px 18px 90px" }}>
+      <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.lagon, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
+        <ChevronLeft size={18} /> Retour au profil
+      </button>
+
+      {error && <div style={{ color: C.corail, fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginBottom: 12 }}>{error}</div>}
+
+      {reports === null ? (
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960" }}>Chargement…</div>
+      ) : reports.length === 0 ? (
+        <EmptyState text="Aucun signalement pour le moment." />
+      ) : (
+        reports.map((r) => {
+          const activity = r.cible_type === "activite" ? activitiesById[r.cible_id] : null;
+          const organisateur = activity ? profilesById[activity.organisateur_id] : null;
+          return (
+            <div key={r.id} style={{ background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
+                <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, color: C.encre }}>{r.motif}</div>
+                <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 10.5, color: "#5B6960", whiteSpace: "nowrap" }}>
+                  {new Date(r.created_at).toLocaleDateString("fr-FR")}
+                </div>
+              </div>
+              {r.detail && <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#3E4A43", marginBottom: 8 }}>{r.detail}</div>}
+
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12, color: "#5B6960", marginBottom: 8 }}>
+                {activity ? (
+                  <>Sortie : <strong>{activity.titre}</strong> — organisée par <strong>{organisateur ? organisateur.prenom : "?"}</strong>
+                    {organisateur && <> ({STATUT_COMPTE_LABELS[organisateur.statut] || organisateur.statut})</>}
+                  </>
+                ) : r.cible_type === "activite" ? "Sortie supprimée" : "Cible : " + r.cible_type}
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                <select
+                  value={r.statut} disabled={busyId === r.id}
+                  onChange={(e) => setReportStatut(r.id, e.target.value)}
+                  style={{ padding: "6px 8px", borderRadius: 8, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 12 }}
+                >
+                  {Object.entries(STATUT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                </select>
+
+                {organisateur && organisateur.statut !== "suspendu" && (
+                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "suspendu")} style={modBtnStyle(C.soleil)}>Suspendre</button>
+                )}
+                {organisateur && organisateur.statut !== "banni" && (
+                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "banni")} style={modBtnStyle(C.corail)}>Bannir</button>
+                )}
+                {organisateur && organisateur.statut !== "actif" && (
+                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "actif")} style={modBtnStyle(C.mangrove)}>Réactiver</button>
+                )}
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
+  );
+}
+
+function modBtnStyle(color) {
+  return {
+    padding: "6px 10px", borderRadius: 8, border: "1.5px solid " + color, background: C.blanc,
+    color, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
+  };
 }
 
 /* ---------------------------------- TAB BAR ---------------------------------- */

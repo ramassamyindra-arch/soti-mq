@@ -152,3 +152,64 @@ create policy "reports_insert_own"
 alter publication supabase_realtime add table public.activities;
 alter publication supabase_realtime add table public.participations;
 alter publication supabase_realtime add table public.messages;
+
+
+-- ===================== Modération : statut de compte + rôle admin =====================
+
+alter table public.profiles add column statut text not null default 'actif' check (statut in ('actif', 'suspendu', 'banni'));
+alter table public.profiles add column is_admin boolean not null default false;
+
+create or replace function public.is_admin() returns boolean
+language sql stable
+as $$ select coalesce((select is_admin from public.profiles where id = auth.uid()), false); $$;
+
+create or replace function public.is_active() returns boolean
+language sql stable
+as $$ select coalesce((select statut = 'actif' from public.profiles where id = auth.uid()), false); $$;
+
+-- L'admin peut modifier n'importe quel profil (changer son statut notamment).
+create policy "profiles_update_admin"
+  on public.profiles for update
+  to authenticated
+  using (public.is_admin());
+
+-- L'admin peut lire et traiter les signalements.
+create policy "reports_select_admin"
+  on public.reports for select
+  to authenticated
+  using (public.is_admin());
+
+create policy "reports_update_admin"
+  on public.reports for update
+  to authenticated
+  using (public.is_admin());
+
+-- Un compte suspendu ou banni ne peut plus créer de sortie, s'inscrire ni écrire de message.
+drop policy "activities_insert_own" on public.activities;
+create policy "activities_insert_own"
+  on public.activities for insert
+  to authenticated
+  with check (auth.uid() = organisateur_id and public.is_active());
+
+drop policy "participations_insert_own" on public.participations;
+create policy "participations_insert_own"
+  on public.participations for insert
+  to authenticated
+  with check (auth.uid() = user_id and public.is_active());
+
+drop policy "messages_insert_participants" on public.messages;
+create policy "messages_insert_participants"
+  on public.messages for insert
+  to authenticated
+  with check (
+    auth.uid() = author_id
+    and public.is_active()
+    and (
+      exists (select 1 from public.participations p where p.activity_id = messages.activity_id and p.user_id = auth.uid())
+      or exists (select 1 from public.activities a where a.id = messages.activity_id and a.organisateur_id = auth.uid())
+    )
+  );
+
+-- Pour désigner un administrateur (à exécuter une fois, en remplaçant l'e-mail) :
+-- update public.profiles set is_admin = true
+--   where id = (select id from auth.users where email = 'votre-email@exemple.com');
