@@ -290,3 +290,30 @@ alter table public.messages add constraint messages_no_sensitive_content check (
   and content !~ '([0-9][ -]?){13,19}'
   and content !~* '\b[a-z]{2}[0-9]{2}[a-z0-9]{10,30}\b'
 );
+
+
+-- ===================== Chat réservé aux participants confirmés =====================
+-- Les membres en liste d'attente ne doivent plus lire ni écrire dans le
+-- chat de groupe tant qu'ils ne sont pas passés "inscrit".
+
+drop policy "messages_select_participants" on public.messages;
+create policy "messages_select_participants"
+  on public.messages for select
+  to authenticated
+  using (
+    exists (select 1 from public.participations p where p.activity_id = messages.activity_id and p.user_id = auth.uid() and p.statut = 'inscrit')
+    or exists (select 1 from public.activities a where a.id = messages.activity_id and a.organisateur_id = auth.uid())
+  );
+
+drop policy "messages_insert_participants" on public.messages;
+create policy "messages_insert_participants"
+  on public.messages for insert
+  to authenticated
+  with check (
+    auth.uid() = author_id
+    and public.is_active()
+    and (
+      exists (select 1 from public.participations p where p.activity_id = messages.activity_id and p.user_id = auth.uid() and p.statut = 'inscrit')
+      or exists (select 1 from public.activities a where a.id = messages.activity_id and a.organisateur_id = auth.uid())
+    )
+  );

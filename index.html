@@ -492,7 +492,6 @@ function SotiMQ() {
   const getActivity = (id) => activities.find((a) => a.id === id);
   const joinedIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "inscrit").map((p) => p.activity_id) : [];
   const waitlistIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "liste_attente").map((p) => p.activity_id) : [];
-  const conversationIds = session ? participations.filter((p) => p.user_id === session.user.id).map((p) => p.activity_id) : [];
 
   function toggleInterest(id) {
     setObDraft((p) => ({
@@ -632,7 +631,7 @@ function SotiMQ() {
     (filterCommune === "Toutes" || a.commune === filterCommune)
   );
 
-  const myConversations = activities.filter((a) => conversationIds.includes(a.id));
+  const myConversations = activities.filter((a) => joinedIds.includes(a.id));
   const organisedCount = profile ? activities.filter((a) => a.organisateur_id === profile.id).length : 0;
   const chatDisplayMessages = chatMessages.map((m) => ({
     author: m.author_id === session?.user?.id ? "me" : "other",
@@ -1116,14 +1115,9 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
               </button>
             </>
           ) : waitlisted ? (
-            <>
-              <button disabled={busy} onClick={onLeave} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "1.5px solid " + C.soleil, background: C.blanc, color: "#8a6a00", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
-                {busy ? "..." : `Quitter la liste (${myWaitlistPosition}e)`}
-              </button>
-              <button onClick={onChat} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
-                Discuter
-              </button>
-            </>
+            <button disabled={busy} onClick={onLeave} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "1.5px solid " + C.soleil, background: C.blanc, color: "#8a6a00", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
+              {busy ? "..." : `Quitter la liste (${myWaitlistPosition}e)`}
+            </button>
           ) : (
             <button
               disabled={busy}
@@ -1139,6 +1133,12 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
             </button>
           )}
         </div>
+
+        {waitlisted && (
+          <div style={{ marginTop: 10, fontFamily: "'Work Sans', sans-serif", fontSize: 12, color: "#5B6960" }}>
+            Le chat de groupe se débloque dès que ta place est confirmée.
+          </div>
+        )}
 
         {!isOwner && (
           <div style={{ marginTop: 14 }}>
