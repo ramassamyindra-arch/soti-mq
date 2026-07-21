@@ -61,6 +61,16 @@ const C = {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
+const LINK_RE = /(https?:\/\/|www\.[a-z0-9-]+\.[a-z]{2,})/i;
+const CARD_RE = /([0-9][ -]?){13,19}/;
+const IBAN_RE = /\b[a-z]{2}[0-9]{2}[a-z0-9]{10,30}\b/i;
+
+function detectSensitiveContent(text) {
+  if (LINK_RE.test(text)) return "Les liens externes ne sont pas autorisés dans le chat.";
+  if (CARD_RE.test(text) || IBAN_RE.test(text)) return "Ne partage pas de coordonnées bancaires (numéro de carte, IBAN) dans le chat.";
+  return null;
+}
+
 const CATEGORIES = [
   { id: "plage", label: "Plage", icon: Waves, color: C.lagonLight },
   { id: "rando", label: "Randonnée", icon: Mountain, color: C.mangrove },
@@ -86,10 +96,18 @@ function Wave({ color = C.lagon, height = 14 }) {
   );
 }
 
-function Avatar({ name, size = 32, bg }) {
+function Avatar({ name, size = 32, bg, src }) {
   const initial = (name || "?").trim().charAt(0).toUpperCase();
   const palette = [C.lagon, C.corail, C.mangrove, C.prune, C.lagonLight];
   const color = bg || palette[(name ? name.charCodeAt(0) : 0) % palette.length];
+  if (src) {
+    return (
+      <img src={src} alt={name || ""} style={{
+        width: size, height: size, borderRadius: "50%", objectFit: "cover",
+        border: "2px solid " + C.blanc, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", flexShrink: 0,
+      }} />
+    );
+  }
   return (
     <div style={{
       width: size, height: size, borderRadius: "50%", background: color, color: C.blanc,
@@ -98,6 +116,43 @@ function Avatar({ name, size = 32, bg }) {
       border: "2px solid " + C.blanc, boxShadow: "0 0 0 1px rgba(0,0,0,0.06)", flexShrink: 0,
     }}>
       {initial}
+    </div>
+  );
+}
+
+function AvatarUpload({ name, avatarUrl, onUpload, size = 80 }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Image trop lourde (5 Mo max)."); return; }
+    setUploading(true); setError("");
+    const result = await onUpload(file);
+    setUploading(false);
+    if (result && result.ok === false) setError(result.message);
+  }
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+      <div style={{ position: "relative", cursor: "pointer" }} onClick={() => inputRef.current && inputRef.current.click()}>
+        <Avatar name={name} src={avatarUrl} size={size} />
+        <div style={{
+          position: "absolute", bottom: 0, right: 0, width: Math.round(size * 0.34), height: Math.round(size * 0.34),
+          borderRadius: "50%", background: C.corail, display: "flex", alignItems: "center", justifyContent: "center",
+          border: "2px solid " + C.blanc,
+        }}>
+          <Pencil size={Math.round(size * 0.16)} color={C.blanc} />
+        </div>
+      </div>
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
+      <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, color: "#5B6960" }}>
+        {uploading ? "Envoi..." : "Changer la photo"}
+      </div>
+      {error && <div style={{ color: C.corail, fontFamily: "'Work Sans', sans-serif", fontSize: 11, textAlign: "center" }}>{error}</div>}
     </div>
   );
 }
@@ -120,7 +175,7 @@ function Chip({ active, onClick, children, colorActive }) {
   );
 }
 
-function TicketCard({ activity, joined, onOpen }) {
+function TicketCard({ activity, joined, waitlisted, onOpen }) {
   const cat = catById(activity.categorie);
   const Icon = cat.icon;
   const d = new Date(activity.date + "T00:00:00");
@@ -165,6 +220,11 @@ function TicketCard({ activity, joined, onOpen }) {
               INSCRIT
             </div>
           )}
+          {waitlisted && (
+            <div style={{ background: C.soleil, color: C.encre, borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif", flexShrink: 0 }}>
+              EN ATTENTE
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 5, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5 }}>
           <MapPin size={13} /> {activity.lieu} · {activity.commune}
@@ -179,7 +239,9 @@ function TicketCard({ activity, joined, onOpen }) {
             ))}
           </div>
           <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 11.5, color: spotsLeft <= 0 ? C.corail : C.mangrove, fontWeight: 700 }}>
-            {spotsLeft <= 0 ? "COMPLET" : `${activity.inscrits.length}/${activity.places} places`}
+            {spotsLeft <= 0
+              ? `COMPLET${activity.liste_attente.length ? " · " + activity.liste_attente.length + " en attente" : ""}`
+              : `${activity.inscrits.length}/${activity.places} places`}
           </div>
         </div>
       </div>
@@ -320,7 +382,7 @@ function SotiMQ() {
   const [profile, setProfile] = useState(null);
   const [profileChecked, setProfileChecked] = useState(false);
   const [obStep, setObStep] = useState(0);
-  const [obDraft, setObDraft] = useState({ prenom: "", commune: COMMUNES[0], interests: [] });
+  const [obDraft, setObDraft] = useState({ prenom: "", commune: COMMUNES[0], interests: [], age: "", bio: "", avatar_url: "" });
 
   const [activitiesRaw, setActivitiesRaw] = useState([]);
   const [participations, setParticipations] = useState([]);
@@ -373,7 +435,7 @@ function SotiMQ() {
     const [{ data: acts }, { data: parts }, { data: profs }] = await Promise.all([
       supabase.from("activities").select("*").order("date", { ascending: true }),
       supabase.from("participations").select("*"),
-      supabase.from("profiles").select("id, prenom, commune, interests"),
+      supabase.from("profiles").select("id, prenom, commune, interests, avatar_url"),
     ]);
     setActivitiesRaw(acts || []);
     setParticipations(parts || []);
@@ -410,19 +472,27 @@ function SotiMQ() {
 
   /* ---------- helpers ---------- */
   const prenomOf = (id) => (profilesById[id] && profilesById[id].prenom) || "Membre";
+  const avatarOf = (id) => profilesById[id] && profilesById[id].avatar_url;
 
   const activities = activitiesRaw.map((a) => {
     const parts = participations.filter((p) => p.activity_id === a.id);
+    const inscritsParts = parts.filter((p) => p.statut === "inscrit");
+    const attenteParts = parts.filter((p) => p.statut === "liste_attente");
     return {
       ...a,
       organisateur: prenomOf(a.organisateur_id),
-      inscrits: parts.map((p) => prenomOf(p.user_id)),
-      inscrits_ids: parts.map((p) => p.user_id),
+      organisateur_avatar: avatarOf(a.organisateur_id),
+      inscrits: inscritsParts.map((p) => prenomOf(p.user_id)),
+      inscrits_ids: inscritsParts.map((p) => p.user_id),
+      liste_attente: attenteParts.map((p) => prenomOf(p.user_id)),
+      liste_attente_ids: attenteParts.map((p) => p.user_id),
     };
   });
 
   const getActivity = (id) => activities.find((a) => a.id === id);
-  const joinedIds = session ? participations.filter((p) => p.user_id === session.user.id).map((p) => p.activity_id) : [];
+  const joinedIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "inscrit").map((p) => p.activity_id) : [];
+  const waitlistIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "liste_attente").map((p) => p.activity_id) : [];
+  const conversationIds = session ? participations.filter((p) => p.user_id === session.user.id).map((p) => p.activity_id) : [];
 
   function toggleInterest(id) {
     setObDraft((p) => ({
@@ -440,9 +510,11 @@ function SotiMQ() {
 
   async function finishOnboarding() {
     if (!obDraft.prenom.trim()) return { ok: true };
+    if (obDraft.age && Number(obDraft.age) < 18) return { ok: false, message: "Tu dois avoir 18 ans ou plus pour utiliser Sòti MQ." };
     setBusyAction(true);
     const { data, error } = await supabase.from("profiles").insert({
       id: session.user.id, prenom: obDraft.prenom.trim(), commune: obDraft.commune, interests: obDraft.interests,
+      age: obDraft.age ? Number(obDraft.age) : null, bio: obDraft.bio.trim(), avatar_url: obDraft.avatar_url || null,
     }).select().single();
     setBusyAction(false);
     if (error) return { ok: false, message: error.message };
@@ -454,12 +526,24 @@ function SotiMQ() {
     if (!profile) return;
     await supabase.from("profiles").update({
       prenom: profile.prenom, commune: profile.commune, interests: profile.interests,
+      age: profile.age ? Number(profile.age) : null, bio: (profile.bio || "").trim(), avatar_url: profile.avatar_url || null,
     }).eq("id", profile.id);
+  }
+
+  async function uploadAvatar(file) {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${session.user.id}/avatar.${ext}`;
+    const { error } = await supabase.storage.from("avatars").upload(path, file, { upsert: true, cacheControl: "3600" });
+    if (error) return { ok: false, message: error.message };
+    const { data } = supabase.storage.from("avatars").getPublicUrl(path);
+    return { ok: true, url: data.publicUrl + "?t=" + Date.now() };
   }
 
   async function joinActivity(id) {
     setBusyAction(true); setActionError("");
-    const { error } = await supabase.from("participations").insert({ activity_id: id, user_id: session.user.id });
+    const activity = getActivity(id);
+    const statut = activity && activity.inscrits.length >= activity.places ? "liste_attente" : "inscrit";
+    const { error } = await supabase.from("participations").insert({ activity_id: id, user_id: session.user.id, statut });
     if (error) { setActionError("Impossible de rejoindre cette sortie : " + error.message); setBusyAction(false); return; }
     await refreshCommunity();
     setBusyAction(false);
@@ -541,14 +625,14 @@ function SotiMQ() {
     setBusyAction(false);
   }
 
-  const formValid = form.titre && form.lieu && form.date && form.heure;
+  const formValid = form.titre && form.lieu && form.date && form.heure && !!profile.avatar_url;
 
   const filteredActivities = activities.filter((a) =>
     (filterCat === "Toutes" || a.categorie === filterCat) &&
     (filterCommune === "Toutes" || a.commune === filterCommune)
   );
 
-  const myConversations = activities.filter((a) => joinedIds.includes(a.id));
+  const myConversations = activities.filter((a) => conversationIds.includes(a.id));
   const organisedCount = profile ? activities.filter((a) => a.organisateur_id === profile.id).length : 0;
   const chatDisplayMessages = chatMessages.map((m) => ({
     author: m.author_id === session?.user?.id ? "me" : "other",
@@ -594,6 +678,11 @@ function SotiMQ() {
           <Onboarding
             obStep={obStep} setObStep={setObStep} profile={obDraft} setProfile={setObDraft}
             toggleInterest={toggleInterest} finishOnboarding={finishOnboarding}
+            onUploadAvatar={async (file) => {
+              const r = await uploadAvatar(file);
+              if (r.ok) setObDraft((d) => ({ ...d, avatar_url: r.url }));
+              return r;
+            }}
           />
         ) : profile.statut !== "actif" ? (
           <SuspendedScreen statut={profile.statut} onSignOut={signOut} />
@@ -637,14 +726,14 @@ function SotiMQ() {
               )}
               {tab === "fil" && (
                 <FilTab
-                  activities={filteredActivities} joinedIds={joinedIds} onOpen={setDetailId}
+                  activities={filteredActivities} joinedIds={joinedIds} waitlistIds={waitlistIds} onOpen={setDetailId}
                   filterCat={filterCat} setFilterCat={setFilterCat}
                   filterCommune={filterCommune} setFilterCommune={setFilterCommune}
                   showBanner={showBanner} setShowBanner={setShowBanner}
                 />
               )}
               {tab === "creer" && (
-                <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} busy={busyAction} />
+                <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} busy={busyAction} hasPhoto={!!profile.avatar_url} />
               )}
               {tab === "messages" && !chatId && (
                 <MessagesList conversations={myConversations} onOpen={setChatId} />
@@ -665,6 +754,14 @@ function SotiMQ() {
                   onSignOut={signOut}
                   onDeleteAccount={deleteAccount}
                   onOpenModeration={() => setTab("moderation")}
+                  onUploadAvatar={async (file) => {
+                    const r = await uploadAvatar(file);
+                    if (r.ok) {
+                      setProfile((p) => ({ ...p, avatar_url: r.url }));
+                      await supabase.from("profiles").update({ avatar_url: r.url }).eq("id", profile.id);
+                    }
+                    return r;
+                  }}
                   busy={busyAction}
                 />
               )}
@@ -673,6 +770,7 @@ function SotiMQ() {
               {detailId && (
                 <DetailSheet
                   activity={getActivity(detailId)} joined={joinedIds.includes(detailId)}
+                  waitlisted={waitlistIds.includes(detailId)}
                   myId={profile.id} onClose={() => setDetailId(null)}
                   onJoin={() => joinActivity(detailId)} onLeave={() => leaveActivity(detailId)}
                   onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
@@ -698,12 +796,16 @@ function SotiMQ() {
 
 /* --------------------------------- ONBOARDING --------------------------------- */
 
-function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, finishOnboarding }) {
+function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, finishOnboarding, onUploadAvatar }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const stepValid = obStep === 0 ? !!profile.prenom.trim()
+    : obStep === 1 ? profile.interests.length >= 3
+    : true;
+
   async function handleNext() {
-    if (obStep === 0) { setObStep(1); return; }
+    if (obStep < 2) { setObStep(obStep + 1); return; }
     setBusy(true); setError("");
     const result = await finishOnboarding();
     setBusy(false);
@@ -765,29 +867,56 @@ function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, fi
             </div>
           </>
         )}
+
+        {obStep === 2 && (
+          <>
+            <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, marginBottom: 4 }}>Ton profil</div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960", marginBottom: 18 }}>Tout est facultatif, sauf l'âge s'il est renseigné (18 ans minimum).</div>
+
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: 20 }}>
+              <AvatarUpload name={profile.prenom} avatarUrl={profile.avatar_url} onUpload={onUploadAvatar} size={84} />
+            </div>
+
+            <Field label="Âge">
+              <input
+                type="number" min="18" max="120" value={profile.age}
+                onChange={(e) => setProfile((p) => ({ ...p, age: e.target.value }))}
+                placeholder="Ex. 27" style={inputStyle}
+              />
+            </Field>
+
+            <Field label="Bio courte">
+              <textarea
+                value={profile.bio} maxLength={280}
+                onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+                placeholder="Deux mots sur toi..." style={{ ...inputStyle, resize: "none", minHeight: 70 }}
+              />
+            </Field>
+          </>
+        )}
       </div>
 
       {error && (
         <div style={{ padding: "0 24px 8px", background: C.sable, fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: C.corail }}>{error}</div>
       )}
       <div style={{ padding: "14px 24px 22px", background: C.sable, display: "flex", gap: 10 }}>
-        {obStep === 1 && (
-          <button onClick={() => setObStep(0)} style={{ padding: "13px 18px", borderRadius: 12, border: "1.5px solid " + C.sableDark, background: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, cursor: "pointer" }}>
+        {obStep > 0 && (
+          <button onClick={() => setObStep(obStep - 1)} style={{ padding: "13px 18px", borderRadius: 12, border: "1.5px solid " + C.sableDark, background: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, cursor: "pointer" }}>
             Retour
           </button>
         )}
         <button
-          disabled={(obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) || busy}
+          disabled={!stepValid || busy}
           onClick={handleNext}
           style={{
             flex: 1, padding: "13px 18px", borderRadius: 12, border: "none",
-            background: ((obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) || busy) ? C.sableDark : C.corail,
-            color: ((obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) || busy) ? "#8a8a7a" : C.blanc,
+            background: (!stepValid || busy) ? C.sableDark : C.corail,
+            color: (!stepValid || busy) ? "#8a8a7a" : C.blanc,
             fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5,
-            cursor: ((obStep === 0 ? !profile.prenom.trim() : profile.interests.length < 3) || busy) ? "not-allowed" : "pointer",
+            cursor: (!stepValid || busy) ? "not-allowed" : "pointer",
           }}
         >
-          {busy ? "..." : obStep === 0 ? "Continuer" : "Annou allé ! →"}
+          {busy ? "..." : obStep < 2 ? "Continuer" : "Annou allé ! →"}
         </button>
       </div>
     </div>
@@ -796,7 +925,7 @@ function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, fi
 
 /* ----------------------------------- FIL TAB ----------------------------------- */
 
-function FilTab({ activities, joinedIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner }) {
+function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner }) {
   return (
     <div style={{ padding: "14px 18px 90px" }}>
       {showBanner && (
@@ -823,7 +952,7 @@ function FilTab({ activities, joinedIds, onOpen, filterCat, setFilterCat, filter
       {activities.length === 0 ? (
         <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
       ) : (
-        activities.map((a) => <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} onOpen={onOpen} />)
+        activities.map((a) => <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />)
       )}
     </div>
   );
@@ -902,7 +1031,7 @@ function ReportPicker({ onSubmit, onCancel }) {
 
 /* --------------------------------- DETAIL SHEET --------------------------------- */
 
-function DetailSheet({ activity, joined, myId, onClose, onJoin, onLeave, onChat, onReport, busy }) {
+function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, busy }) {
   const [showReport, setShowReport] = useState(false);
   if (!activity) return null;
   const cat = catById(activity.categorie);
@@ -910,6 +1039,7 @@ function DetailSheet({ activity, joined, myId, onClose, onJoin, onLeave, onChat,
   const full = new Date(activity.date + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
   const isOwner = activity.organisateur_id === myId;
   const full_capacity = activity.inscrits.length >= activity.places;
+  const myWaitlistPosition = waitlisted ? activity.liste_attente_ids.indexOf(myId) + 1 : 0;
 
   return (
     <div style={{ position: "absolute", inset: 0, zIndex: 20 }}>
@@ -941,20 +1071,35 @@ function DetailSheet({ activity, joined, myId, onClose, onJoin, onLeave, onChat,
           Organisé par
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-          <Avatar name={activity.organisateur} size={34} />
+          <Avatar name={activity.organisateur} src={activity.organisateur_avatar} size={34} />
           <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
         </div>
 
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Participants
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: activity.liste_attente.length ? 14 : 20 }}>
           {activity.inscrits.map((n) => (
             <div key={n} style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Avatar name={n} size={26} /><span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5 }}>{n}</span>
             </div>
           ))}
         </div>
+
+        {activity.liste_attente.length > 0 && (
+          <>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+              Liste d'attente ({activity.liste_attente.length})
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 20 }}>
+              {activity.liste_attente.map((n, i) => (
+                <div key={n} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <Avatar name={n} size={26} bg={C.soleil} /><span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5 }}>{n} {i === 0 ? "(1er)" : `(${i + 1}e)`}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         <div style={{ display: "flex", gap: 10 }}>
           {isOwner ? (
@@ -970,18 +1115,27 @@ function DetailSheet({ activity, joined, myId, onClose, onJoin, onLeave, onChat,
                 Discuter
               </button>
             </>
+          ) : waitlisted ? (
+            <>
+              <button disabled={busy} onClick={onLeave} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "1.5px solid " + C.soleil, background: C.blanc, color: "#8a6a00", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
+                {busy ? "..." : `Quitter la liste (${myWaitlistPosition}e)`}
+              </button>
+              <button onClick={onChat} style={{ flex: 1, padding: "14px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+                Discuter
+              </button>
+            </>
           ) : (
             <button
-              disabled={full_capacity || busy}
+              disabled={busy}
               onClick={onJoin}
               style={{
                 flex: 1, padding: "14px", borderRadius: 14, border: "none",
-                background: (full_capacity || busy) ? C.sableDark : C.corail, color: (full_capacity || busy) ? "#8a8a7a" : C.blanc,
+                background: busy ? C.sableDark : C.corail, color: busy ? "#8a8a7a" : C.blanc,
                 fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5,
-                cursor: (full_capacity || busy) ? "not-allowed" : "pointer",
+                cursor: busy ? "not-allowed" : "pointer",
               }}
             >
-              {busy ? "..." : full_capacity ? "Complet — liste d'attente indisponible (démo)" : "Rejoindre la sortie"}
+              {busy ? "..." : full_capacity ? "Rejoindre la liste d'attente" : "Rejoindre la sortie"}
             </button>
           )}
         </div>
@@ -1014,10 +1168,15 @@ function Field({ label, children }) {
 }
 const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 14, background: C.blanc };
 
-function CreerTab({ form, setForm, onPublish, formValid, busy }) {
+function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div style={{ padding: "16px 18px 100px" }}>
+      {!hasPhoto && (
+        <div style={{ background: "#FBE4DC", border: "1px solid " + C.corail, borderRadius: 12, padding: "10px 14px", marginBottom: 16, fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: C.corail }}>
+          Ajoute une photo de profil (depuis l'onglet Profil) pour pouvoir publier une sortie.
+        </div>
+      )}
       <Field label="Titre de la sortie">
         <input style={inputStyle} placeholder="Ex. Rando au Rocher du Diamant" value={form.titre} onChange={set("titre")} />
       </Field>
@@ -1125,6 +1284,8 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
   async function submit() {
     const value = text.trim();
     if (!value || sending) return;
+    const sensitiveReason = detectSensitiveContent(value);
+    if (sensitiveReason) { setSendError(sensitiveReason); return; }
     setSending(true); setSendError("");
     const result = await onSend(value);
     setSending(false);
@@ -1204,24 +1365,28 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, busy }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, onUploadAvatar, busy }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
     <div style={{ padding: "18px 18px 90px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
-        <Avatar name={profile.prenom} size={62} />
+        {editing ? (
+          <AvatarUpload name={profile.prenom} avatarUrl={profile.avatar_url} onUpload={onUploadAvatar} size={62} />
+        ) : (
+          <Avatar name={profile.prenom} src={profile.avatar_url} size={62} />
+        )}
         <div style={{ flex: 1 }}>
           {editing ? (
             <input value={profile.prenom} onChange={(e) => setProfile((p) => ({ ...p, prenom: e.target.value }))} style={{ ...inputStyle, padding: "8px 10px", fontSize: 16, fontFamily: "'Fraunces', serif", fontWeight: 600 }} />
           ) : (
-            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}</div>
+            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}{profile.age ? `, ${profile.age}` : ""}</div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2 }}>
             <MapPin size={13} /> {profile.commune}
           </div>
         </div>
-        <button onClick={() => { if (editing) onSave(); setEditing((e) => !e); }} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
+        <button onClick={() => { if (editing) onSave(); setEditing((e) => !e); }} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
           {editing ? <Check size={15} color={C.mangrove} /> : <Pencil size={14} color={C.encre} />}
         </button>
       </div>
@@ -1231,14 +1396,36 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
         <StatCard n={joinedCount} label="sorties rejointes" />
       </div>
 
+      {!editing && profile.bio && (
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: C.encre, lineHeight: 1.5, marginBottom: 20, fontStyle: "italic" }}>
+          « {profile.bio} »
+        </div>
+      )}
+
       {editing && (
-        <Field label="Ta commune">
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {COMMUNES.map((c) => (
-              <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
-            ))}
-          </div>
-        </Field>
+        <>
+          <Field label="Âge">
+            <input
+              type="number" min="18" max="120" value={profile.age || ""}
+              onChange={(e) => setProfile((p) => ({ ...p, age: e.target.value }))}
+              placeholder="Ex. 27" style={inputStyle}
+            />
+          </Field>
+          <Field label="Bio courte">
+            <textarea
+              value={profile.bio || ""} maxLength={280}
+              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+              placeholder="Deux mots sur toi..." style={{ ...inputStyle, resize: "none", minHeight: 70 }}
+            />
+          </Field>
+          <Field label="Ta commune">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {COMMUNES.map((c) => (
+                <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
+              ))}
+            </div>
+          </Field>
+        </>
       )}
 
       <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>

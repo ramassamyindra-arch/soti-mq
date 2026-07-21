@@ -213,3 +213,80 @@ create policy "messages_insert_participants"
 -- Pour désigner un administrateur (à exécuter une fois, en remplaçant l'e-mail) :
 -- update public.profiles set is_admin = true
 --   where id = (select id from auth.users where email = 'votre-email@exemple.com');
+
+
+-- ===================== Profil enrichi : âge, bio, photo =====================
+
+alter table public.profiles add column age int check (age is null or age >= 18);
+alter table public.profiles add column bio text not null default '' check (char_length(bio) <= 280);
+alter table public.profiles add column avatar_url text;
+
+-- Bucket de stockage pour les photos de profil (public en lecture).
+insert into storage.buckets (id, name, public)
+values ('avatars', 'avatars', true)
+on conflict (id) do nothing;
+
+create policy "avatars_public_read"
+  on storage.objects for select
+  to public
+  using (bucket_id = 'avatars');
+
+create policy "avatars_insert_own"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "avatars_update_own"
+  on storage.objects for update
+  to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+create policy "avatars_delete_own"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'avatars' and (storage.foldername(name))[1] = auth.uid()::text);
+
+
+-- ===================== Liste d'attente automatique =====================
+
+alter table public.participations add column statut text not null default 'inscrit' check (statut in ('inscrit', 'liste_attente'));
+
+create or replace function public.promote_waitlist() returns trigger
+language plpgsql security definer
+as $$
+declare
+  v_places int;
+  v_inscrits int;
+  v_next_id uuid;
+begin
+  select places into v_places from public.activities where id = old.activity_id;
+  if v_places is null then
+    return old;
+  end if;
+  select count(*) into v_inscrits from public.participations where activity_id = old.activity_id and statut = 'inscrit';
+  if v_inscrits < v_places then
+    select id into v_next_id from public.participations
+      where activity_id = old.activity_id and statut = 'liste_attente'
+      order by created_at asc limit 1;
+    if v_next_id is not null then
+      update public.participations set statut = 'inscrit' where id = v_next_id;
+    end if;
+  end if;
+  return old;
+end;
+$$;
+
+create trigger trg_promote_waitlist
+  after delete on public.participations
+  for each row execute function public.promote_waitlist();
+
+
+-- ===================== Filtrage de contenu sensible dans les messages =====================
+-- Filet de sécurité côté base (en plus du contrôle côté application) : bloque
+-- les liens externes et les motifs ressemblant à des coordonnées bancaires.
+
+alter table public.messages add constraint messages_no_sensitive_content check (
+  content !~* '(https?://|www\.[a-z0-9-]+\.[a-z]{2,})'
+  and content !~ '([0-9][ -]?){13,19}'
+  and content !~* '\b[a-z]{2}[0-9]{2}[a-z0-9]{10,30}\b'
+);
