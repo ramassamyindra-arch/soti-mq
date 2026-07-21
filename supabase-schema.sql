@@ -124,6 +124,30 @@ create policy "messages_delete_own"
   to authenticated
   using (auth.uid() = author_id);
 
+
+create table public.reports (
+  id uuid primary key default gen_random_uuid(),
+  signalant_id uuid not null references auth.users(id) on delete cascade,
+  cible_type text not null check (cible_type in ('activite', 'profil', 'message')),
+  cible_id uuid not null,
+  motif text not null,
+  detail text,
+  statut text not null default 'nouveau' check (statut in ('nouveau', 'traite', 'classe_sans_suite')),
+  created_at timestamptz not null default now()
+);
+alter table public.reports enable row level security;
+
+-- Chaque membre peut créer un signalement en son nom.
+create policy "reports_insert_own"
+  on public.reports for insert
+  to authenticated
+  with check (auth.uid() = signalant_id);
+
+-- Volontairement aucune policy de lecture pour les membres : seul le
+-- propriétaire du projet (via le tableau de bord Supabase, qui contourne
+-- la RLS) peut consulter les signalements tant qu'il n'y a pas de
+-- back-office de modération dédié.
+
 -- Mises à jour en direct pour le fil d'activités, les inscriptions et le chat
 alter publication supabase_realtime add table public.activities;
 alter publication supabase_realtime add table public.participations;
