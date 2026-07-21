@@ -36,7 +36,7 @@ import { createRoot } from "react-dom/client";
 import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
-  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil
+  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -69,6 +69,10 @@ function detectSensitiveContent(text) {
   if (LINK_RE.test(text)) return "Les liens externes ne sont pas autorisés dans le chat.";
   if (CARD_RE.test(text) || IBAN_RE.test(text)) return "Ne partage pas de coordonnées bancaires (numéro de carte, IBAN) dans le chat.";
   return null;
+}
+
+function jitsiUrl(activityId) {
+  return "https://meet.jit.si/SotiMQ-" + activityId.replace(/-/g, "");
 }
 
 const CATEGORIES = [
@@ -398,7 +402,7 @@ function SotiMQ() {
 
   const [form, setForm] = useState({
     titre: "", categorie: "plage", commune: COMMUNES[0], lieu: "",
-    date: "", heure: "", places: 6, description: "",
+    date: "", heure: "", places: 6, description: "", en_ligne: false,
   });
 
   const [busyAction, setBusyAction] = useState(false);
@@ -561,8 +565,8 @@ function SotiMQ() {
     const { data: newAct, error } = await supabase.from("activities").insert({
       organisateur_id: session.user.id,
       titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
-      lieu: form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
-      description: form.description.trim() || "Aucune description fournie.",
+      lieu: form.en_ligne ? "En visio" : form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
+      description: form.description.trim() || "Aucune description fournie.", en_ligne: form.en_ligne,
     }).select().single();
     if (error || !newAct) {
       setActionError("Impossible de publier la sortie : " + (error?.message || "erreur inconnue"));
@@ -572,7 +576,7 @@ function SotiMQ() {
     const { error: partError } = await supabase.from("participations").insert({ activity_id: newAct.id, user_id: session.user.id });
     if (partError) { setActionError("Sortie publiée, mais l'inscription automatique a échoué : " + partError.message); }
     await refreshCommunity();
-    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "" });
+    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "", en_ligne: false });
     setTab("fil");
     setDetailId(newAct.id);
     setBusyAction(false);
@@ -624,7 +628,7 @@ function SotiMQ() {
     setBusyAction(false);
   }
 
-  const formValid = form.titre && form.lieu && form.date && form.heure && !!profile.avatar_url;
+  const formValid = form.titre && (form.lieu || form.en_ligne) && form.date && form.heure && !!profile.avatar_url;
 
   const filteredActivities = activities.filter((a) =>
     (filterCat === "Toutes" || a.categorie === filterCat) &&
@@ -1060,7 +1064,10 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
 
         <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 14, fontFamily: "'Work Sans', sans-serif", fontSize: 13.5, color: "#3E4A43" }}>
           <div style={{ display: "flex", gap: 7, alignItems: "center" }}><CalendarDays size={15} color={C.lagon} /> <span style={{ textTransform: "capitalize" }}>{full}</span> à {activity.heure}</div>
-          <div style={{ display: "flex", gap: 7, alignItems: "center" }}><MapPin size={15} color={C.lagon} /> {activity.lieu}, {activity.commune}</div>
+          <div style={{ display: "flex", gap: 7, alignItems: "center" }}>
+            {activity.en_ligne ? <Video size={15} color={C.lagon} /> : <MapPin size={15} color={C.lagon} />}
+            {activity.en_ligne ? "En visio" : `${activity.lieu}, ${activity.commune}`}
+          </div>
           <div style={{ display: "flex", gap: 7, alignItems: "center" }}><Users size={15} color={C.lagon} /> {activity.inscrits.length} / {activity.places} participants</div>
         </div>
 
@@ -1098,6 +1105,21 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
               ))}
             </div>
           </>
+        )}
+
+        {activity.en_ligne && (isOwner || joined) && (
+          <a
+            href={jitsiUrl(activity.id)}
+            target="_blank"
+            rel="noopener"
+            style={{
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              padding: "13px", borderRadius: 14, marginBottom: 10, textDecoration: "none",
+              background: C.soleil, color: C.encre, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14,
+            }}
+          >
+            <Video size={17} /> Rejoindre l'appel visio
+          </a>
         )}
 
         <div style={{ display: "flex", gap: 10 }}>
@@ -1197,9 +1219,18 @@ function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
         </div>
       </Field>
 
-      <Field label="Lieu précis">
-        <input style={inputStyle} placeholder="Ex. Anse Dufour" value={form.lieu} onChange={set("lieu")} />
+      <Field label="Format">
+        <label style={{ display: "flex", alignItems: "center", gap: 8, fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: C.encre, cursor: "pointer" }}>
+          <input type="checkbox" checked={form.en_ligne} onChange={(e) => setForm((f) => ({ ...f, en_ligne: e.target.checked }))} />
+          🎥 Sortie en visio (pas de lieu physique)
+        </label>
       </Field>
+
+      {!form.en_ligne && (
+        <Field label="Lieu précis">
+          <input style={inputStyle} placeholder="Ex. Anse Dufour" value={form.lieu} onChange={set("lieu")} />
+        </Field>
+      )}
 
       <div style={{ display: "flex", gap: 12 }}>
         <div style={{ flex: 1 }}>
@@ -1304,6 +1335,15 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
           <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 15, color: C.encre }}>{activity.titre}</div>
           <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, color: "#5B6960" }}>{activity.inscrits.length} participant(s)</div>
         </div>
+        <a
+          href={jitsiUrl(activity.id)}
+          target="_blank"
+          rel="noopener"
+          title="Démarrer un appel vidéo"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", width: 34, height: 34, borderRadius: "50%", background: C.sable, cursor: "pointer" }}
+        >
+          <Video size={16} color={C.lagon} />
+        </a>
         <button onClick={() => setShowReport((s) => !s)} style={{ background: "none", border: "none", color: "#8a4a4a", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer" }}>
           Signaler
         </button>

@@ -317,3 +317,8 @@ create policy "messages_insert_participants"
       or exists (select 1 from public.activities a where a.id = messages.activity_id and a.organisateur_id = auth.uid())
     )
   );
+
+
+-- ===================== Sorties en visio =====================
+
+alter table public.activities add column en_ligne boolean not null default false;
