@@ -822,7 +822,7 @@ function SotiMQ() {
 
   async function submitFeedback(sujet, message) {
     const { error } = await supabase.from("feedback").insert({
-      auteur_id: session.user.id, sujet, message,
+      auteur_id: session.user.id, email: session.user.email, sujet, message,
     });
     if (error) return { ok: false, message: error.message };
     return { ok: true };
@@ -2110,9 +2110,17 @@ function ModerationTab({ onBack }) {
                 </div>
                 <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#3E4A43", marginBottom: 8, whiteSpace: "pre-wrap" }}>{f.message}</div>
                 <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12, color: "#5B6960", marginBottom: 8 }}>
-                  De : <strong>{auteur ? auteur.prenom : "Membre supprimé"}</strong>
+                  De : <strong>{auteur ? auteur.prenom : "Membre supprimé"}</strong>{f.email && <> — {f.email}</>}
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+                  {f.email && (
+                    <a
+                      href={`mailto:${f.email}?subject=${encodeURIComponent("Re : " + f.sujet)}`}
+                      style={{ ...modBtnStyle(C.lagon), textDecoration: "none", display: "inline-block" }}
+                    >
+                      Répondre par e-mail
+                    </a>
+                  )}
                   {f.statut === "nouveau" ? (
                     <button disabled={busyId === f.id} onClick={() => setFeedbackStatut(f.id, "traite")} style={modBtnStyle(C.mangrove)}>Marquer comme traité</button>
                   ) : (

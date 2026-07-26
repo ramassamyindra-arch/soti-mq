@@ -423,3 +423,8 @@ create policy "feedback_update_admin"
   on public.feedback for update
   to authenticated
   using (public.is_admin());
+
+
+-- ===================== Contact : e-mail automatique pour pouvoir répondre =====================
+
+alter table public.feedback add column email text;
