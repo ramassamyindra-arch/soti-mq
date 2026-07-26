@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="Sòti MQ" />
 <link rel="icon" href="./icons/icon-192.png" />
 <link rel="apple-touch-icon" href="./icons/icon-512.png" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   html, body { margin: 0; padding: 0; background: #EAE0C8; }
 </style>
@@ -22,7 +23,8 @@
     "react/jsx-runtime": "https://esm.sh/react@18.3.1/jsx-runtime",
     "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
     "lucide-react": "https://esm.sh/lucide-react@0.462.0?external=react",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "leaflet": "https://esm.sh/leaflet@1.9.4"
   }
 }
 </script>
@@ -132,6 +134,117 @@ const COMMUNES = [
   "Saint-Pierre", "Sainte-Anne", "Sainte-Luce", "Sainte-Marie", "Schoelcher",
   "La Trinité", "Les Trois-Îlets", "Le Vauclin",
 ];
+
+const COMMUNE_COORDS = {
+  "Fort-de-France": [14.6161, -61.0588],
+  "Ajoupa-Bouillon": [14.8317, -61.1197],
+  "Les Anses-d'Arlet": [14.4922, -61.0850],
+  "Basse-Pointe": [14.8654, -61.1183],
+  "Bellefontaine": [14.6742, -61.1672],
+  "Le Carbet": [14.7086, -61.1761],
+  "Case-Pilote": [14.6467, -61.1350],
+  "Le Diamant": [14.4794, -61.0128],
+  "Ducos": [14.5883, -60.9722],
+  "Fonds-Saint-Denis": [14.7194, -61.1122],
+  "Le François": [14.6122, -60.9028],
+  "Grand'Rivière": [14.8747, -61.2153],
+  "Le Gros-Morne": [14.7728, -60.9906],
+  "Le Lamentin": [14.6100, -60.9825],
+  "Le Lorrain": [14.8189, -61.0994],
+  "Macouba": [14.8792, -61.1531],
+  "Le Marigot": [14.8397, -61.0906],
+  "Le Marin": [14.4708, -60.8686],
+  "Le Morne-Rouge": [14.7797, -61.1400],
+  "Le Morne-Vert": [14.6811, -61.1500],
+  "Le Prêcheur": [14.8017, -61.2306],
+  "Rivière-Pilote": [14.5017, -60.9231],
+  "Rivière-Salée": [14.5361, -60.9819],
+  "Le Robert": [14.6764, -60.9394],
+  "Saint-Esprit": [14.5644, -60.9328],
+  "Saint-Joseph": [14.6667, -61.0333],
+  "Saint-Pierre": [14.7439, -61.1758],
+  "Sainte-Anne": [14.4333, -60.8833],
+  "Sainte-Luce": [14.4667, -60.9236],
+  "Sainte-Marie": [14.7789, -61.0028],
+  "Schoelcher": [14.6122, -61.1006],
+  "La Trinité": [14.7386, -60.9611],
+  "Les Trois-Îlets": [14.5389, -61.0397],
+  "Le Vauclin": [14.5461, -60.8419],
+};
+
+function escapeHtml(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function jitterFor(id) {
+  let hash = 0;
+  for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
+  const a = ((hash % 1000) / 1000 - 0.5) * 0.03;
+  const b = (((Math.floor(hash / 256)) % 1000) / 1000 - 0.5) * 0.03;
+  return [a, b];
+}
+
+function ActivityMap({ activities, onOpen }) {
+  const mapRef = useRef(null);
+  const mapInstance = useRef(null);
+  const markersLayer = useRef(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("leaflet").then((mod) => {
+      const L = mod.default || mod;
+      if (cancelled || !mapRef.current || mapInstance.current) return;
+      const map = L.map(mapRef.current, { zoomControl: false }).setView([14.6415, -61.0242], 10);
+      L.control.zoom({ position: "bottomright" }).addTo(map);
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: "&copy; OpenStreetMap contributors",
+        maxZoom: 18,
+      }).addTo(map);
+      markersLayer.current = L.layerGroup().addTo(map);
+      mapInstance.current = map;
+    });
+    return () => {
+      cancelled = true;
+      if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+    };
+  }, []);
+
+  useEffect(() => {
+    window.__openActivityFromMap = onOpen;
+  }, [onOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    import("leaflet").then((mod) => {
+      const L = mod.default || mod;
+      if (cancelled || !markersLayer.current) return;
+      markersLayer.current.clearLayers();
+      activities.forEach((a) => {
+        const base = COMMUNE_COORDS[a.commune] || COMMUNE_COORDS["Fort-de-France"];
+        const [dLat, dLng] = jitterFor(a.id);
+        const cat = catById(a.categorie);
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="width:24px;height:24px;border-radius:50%;background:${cat.color};border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.35)"></div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12],
+        });
+        const marker = L.marker([base[0] + dLat, base[1] + dLng], { icon }).addTo(markersLayer.current);
+        const full = new Date(a.date + "T00:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+        marker.bindPopup(
+          `<div style="font-family: 'Work Sans', sans-serif; min-width:150px;">` +
+          `<div style="font-weight:700; font-size:13px; margin-bottom:2px;">${escapeHtml(a.titre)}</div>` +
+          `<div style="font-size:11.5px; color:#5B6960; margin-bottom:6px;">${escapeHtml(full)}${a.heure ? " · " + escapeHtml(String(a.heure).slice(0, 5)) : ""}</div>` +
+          `<button onclick="window.__openActivityFromMap && window.__openActivityFromMap('${a.id}')" style="background:#0E5C56; color:#fff; border:none; border-radius:8px; padding:5px 10px; font-size:11.5px; font-weight:700; cursor:pointer;">Voir la sortie</button>` +
+          `</div>`
+        );
+      });
+    });
+    return () => { cancelled = true; };
+  }, [activities]);
+
+  return <div ref={mapRef} style={{ width: "100%", height: 240, borderRadius: 16, overflow: "hidden" }} />;
+}
 
 /* ------------------------------- SOUS-COMPOSANTS ------------------------------- */
 
@@ -1061,6 +1174,7 @@ function SotiMQ() {
                   filterCat={filterCat} setFilterCat={setFilterCat}
                   filterCommune={filterCommune} setFilterCommune={setFilterCommune}
                   showBanner={showBanner} setShowBanner={setShowBanner}
+                  onCreateNew={() => setTab("creer")}
                 />
               )}
               {tab === "creer" && (
@@ -1270,7 +1384,7 @@ function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, fi
 
 /* ----------------------------------- FIL TAB ----------------------------------- */
 
-function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner }) {
+function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew }) {
   return (
     <div style={{ padding: "14px 18px 90px" }}>
       {showBanner && (
@@ -1292,6 +1406,21 @@ function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilt
         {COMMUNES.map((c) => (
           <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
         ))}
+      </div>
+
+      <div style={{ position: "relative", marginBottom: 16 }}>
+        <ActivityMap activities={activities} onOpen={onOpen} />
+        <button
+          onClick={onCreateNew}
+          aria-label="Proposer une sortie"
+          style={{
+            position: "absolute", bottom: 12, right: 12, width: 48, height: 48, borderRadius: "50%",
+            background: C.corail, color: C.blanc, border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 4px 10px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 400,
+          }}
+        >
+          <Plus size={22} />
+        </button>
       </div>
 
       {activities.length === 0 ? (
