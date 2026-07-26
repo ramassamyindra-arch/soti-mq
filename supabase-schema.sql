@@ -364,3 +364,29 @@ create policy "reports_select_own"
   on public.reports for select
   to authenticated
   using (auth.uid() = signalant_id);
+
+
+-- ===================== Anti-spam : limitation du débit de messages =====================
+-- Empêche le flood du chat : un membre ne peut pas envoyer plus de 20 messages
+-- par minute (tous chats confondus).
+
+create or replace function public.enforce_message_rate_limit() returns trigger
+language plpgsql
+as $$
+declare
+  v_recent_count int;
+begin
+  select count(*) into v_recent_count
+    from public.messages
+    where author_id = new.author_id
+      and created_at > now() - interval '60 seconds';
+  if v_recent_count >= 20 then
+    raise exception 'Trop de messages envoyés en peu de temps. Merci de patienter quelques instants.';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger trg_enforce_message_rate_limit
+  before insert on public.messages
+  for each row execute function public.enforce_message_rate_limit();
