@@ -840,6 +840,7 @@ function SotiMQ() {
       supabase.from("messages").delete().eq("author_id", uid),
       supabase.from("participations").delete().eq("user_id", uid),
       supabase.from("activities").delete().eq("organisateur_id", uid),
+      supabase.from("feedback").delete().eq("auteur_id", uid),
     ];
     const results = await Promise.all(steps);
     const stepError = results.find((r) => r.error);

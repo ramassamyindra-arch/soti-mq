@@ -428,3 +428,11 @@ create policy "feedback_update_admin"
 -- ===================== Contact : e-mail automatique pour pouvoir répondre =====================
 
 alter table public.feedback add column email text;
+
+
+-- ===================== Contact : suppression lors de la suppression de compte =====================
+
+create policy "feedback_delete_own"
+  on public.feedback for delete
+  to authenticated
+  using (auth.uid() = auteur_id);
