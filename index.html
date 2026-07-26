@@ -1168,11 +1168,14 @@ function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, fi
 
             <div style={{ fontFamily: "'Fraunces', serif", fontSize: 20, fontWeight: 600, color: C.encre, margin: "22px 0 4px" }}>Ta commune</div>
             <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960", marginBottom: 12 }}>Pour te proposer des sorties près de chez toi.</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <select
+              value={profile.commune} onChange={(e) => setProfile((p) => ({ ...p, commune: e.target.value }))}
+              style={{ width: "100%", padding: "13px 16px", borderRadius: 12, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 15, background: C.blanc }}
+            >
               {COMMUNES.map((c) => (
-                <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
+                <option key={c} value={c}>{c}</option>
               ))}
-            </div>
+            </select>
           </>
         )}
 
@@ -1564,11 +1567,11 @@ function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
       </Field>
 
       <Field label="Commune">
-        <div className="scrollx" style={{ display: "flex", gap: 8 }}>
+        <select value={form.commune} onChange={(e) => setForm((f) => ({ ...f, commune: e.target.value }))} style={inputStyle}>
           {COMMUNES.map((c) => (
-            <Chip key={c} active={form.commune === c} onClick={() => setForm((f) => ({ ...f, commune: c }))}>{c}</Chip>
+            <option key={c} value={c}>{c}</option>
           ))}
-        </div>
+        </select>
       </Field>
 
       <Field label="Format">
@@ -1819,11 +1822,11 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
             />
           </Field>
           <Field label="Ta commune">
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <select value={profile.commune} onChange={(e) => setProfile((p) => ({ ...p, commune: e.target.value }))} style={inputStyle}>
               {COMMUNES.map((c) => (
-                <Chip key={c} active={profile.commune === c} onClick={() => setProfile((p) => ({ ...p, commune: c }))}>{c}</Chip>
+                <option key={c} value={c}>{c}</option>
               ))}
-            </div>
+            </select>
           </Field>
         </>
       )}
