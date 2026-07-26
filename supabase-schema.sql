@@ -390,3 +390,36 @@ $$;
 create trigger trg_enforce_message_rate_limit
   before insert on public.messages
   for each row execute function public.enforce_message_rate_limit();
+
+
+-- ===================== Formulaire de contact =====================
+
+create table public.feedback (
+  id uuid primary key default gen_random_uuid(),
+  auteur_id uuid not null references auth.users(id) on delete cascade,
+  sujet text not null,
+  message text not null,
+  statut text not null default 'nouveau' check (statut in ('nouveau', 'traite')),
+  created_at timestamptz not null default now()
+);
+alter table public.feedback enable row level security;
+
+create policy "feedback_insert_own"
+  on public.feedback for insert
+  to authenticated
+  with check (auth.uid() = auteur_id);
+
+create policy "feedback_select_own"
+  on public.feedback for select
+  to authenticated
+  using (auth.uid() = auteur_id);
+
+create policy "feedback_select_admin"
+  on public.feedback for select
+  to authenticated
+  using (public.is_admin());
+
+create policy "feedback_update_admin"
+  on public.feedback for update
+  to authenticated
+  using (public.is_admin());
