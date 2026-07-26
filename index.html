@@ -1992,6 +1992,8 @@ const STATUT_COMPTE_LABELS = { actif: "Actif", suspendu: "Suspendu", banni: "Ban
 
 function ModerationTab({ onBack }) {
   const [modeSubTab, setModeSubTab] = useState("signalements");
+  const [reportFilter, setReportFilter] = useState("nouveau");
+  const [feedbackFilter, setFeedbackFilter] = useState("nouveau");
   const [reports, setReports] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [activitiesById, setActivitiesById] = useState({});
@@ -2093,13 +2095,32 @@ function ModerationTab({ onBack }) {
         </button>
       </div>
 
+      {modeSubTab === "contact" && feedback !== null && (
+        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+          <button onClick={() => setFeedbackFilter("nouveau")} style={{
+            padding: "6px 12px", borderRadius: 999, border: "1.5px solid " + (feedbackFilter === "nouveau" ? C.lagon : C.sableDark),
+            background: feedbackFilter === "nouveau" ? C.lagon : C.blanc, color: feedbackFilter === "nouveau" ? C.blanc : C.encre,
+            fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
+          }}>
+            Nouveaux ({feedback.filter((f) => f.statut === "nouveau").length})
+          </button>
+          <button onClick={() => setFeedbackFilter("traite")} style={{
+            padding: "6px 12px", borderRadius: 999, border: "1.5px solid " + (feedbackFilter === "traite" ? C.lagon : C.sableDark),
+            background: feedbackFilter === "traite" ? C.lagon : C.blanc, color: feedbackFilter === "traite" ? C.blanc : C.encre,
+            fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
+          }}>
+            Traités ({feedback.filter((f) => f.statut !== "nouveau").length})
+          </button>
+        </div>
+      )}
+
       {modeSubTab === "contact" ? (
         feedback === null ? (
           <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960" }}>Chargement…</div>
-        ) : feedback.length === 0 ? (
-          <EmptyState text="Aucun message reçu pour le moment." />
+        ) : feedback.filter((f) => (feedbackFilter === "nouveau" ? f.statut === "nouveau" : f.statut !== "nouveau")).length === 0 ? (
+          <EmptyState text={feedbackFilter === "nouveau" ? "Aucun nouveau message." : "Aucun message traité pour le moment."} />
         ) : (
-          feedback.map((f) => {
+          feedback.filter((f) => (feedbackFilter === "nouveau" ? f.statut === "nouveau" : f.statut !== "nouveau")).map((f) => {
             const auteur = profilesById[f.auteur_id];
             return (
               <div key={f.id} style={{ background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
@@ -2132,12 +2153,33 @@ function ModerationTab({ onBack }) {
             );
           })
         )
-      ) : reports === null ? (
-        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960" }}>Chargement…</div>
-      ) : reports.length === 0 ? (
-        <EmptyState text="Aucun signalement pour le moment." />
       ) : (
-        reports.map((r) => {
+        <>
+          {reports !== null && (
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <button onClick={() => setReportFilter("nouveau")} style={{
+                padding: "6px 12px", borderRadius: 999, border: "1.5px solid " + (reportFilter === "nouveau" ? C.lagon : C.sableDark),
+                background: reportFilter === "nouveau" ? C.lagon : C.blanc, color: reportFilter === "nouveau" ? C.blanc : C.encre,
+                fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
+              }}>
+                Nouveaux ({reports.filter((r) => r.statut === "nouveau").length})
+              </button>
+              <button onClick={() => setReportFilter("traite")} style={{
+                padding: "6px 12px", borderRadius: 999, border: "1.5px solid " + (reportFilter === "traite" ? C.lagon : C.sableDark),
+                background: reportFilter === "traite" ? C.lagon : C.blanc, color: reportFilter === "traite" ? C.blanc : C.encre,
+                fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
+              }}>
+                Traités ({reports.filter((r) => r.statut !== "nouveau").length})
+              </button>
+            </div>
+          )}
+
+          {reports === null ? (
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: "#5B6960" }}>Chargement…</div>
+          ) : reports.filter((r) => (reportFilter === "nouveau" ? r.statut === "nouveau" : r.statut !== "nouveau")).length === 0 ? (
+            <EmptyState text={reportFilter === "nouveau" ? "Aucun nouveau signalement." : "Aucun signalement traité pour le moment."} />
+          ) : (
+            reports.filter((r) => (reportFilter === "nouveau" ? r.statut === "nouveau" : r.statut !== "nouveau")).map((r) => {
           const activity = r.cible_type === "activite" ? activitiesById[r.cible_id] : null;
           const reportedProfile = r.cible_type === "profil" ? profilesById[r.cible_id] : null;
           const organisateur = activity ? profilesById[activity.organisateur_id] : null;
@@ -2194,6 +2236,8 @@ function ModerationTab({ onBack }) {
             </div>
           );
         })
+          )}
+        </>
       )}
     </div>
   );
