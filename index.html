@@ -75,6 +75,17 @@ function jitsiUrl(activityId) {
   return "https://meet.jit.si/SotiMQ-" + activityId.replace(/-/g, "");
 }
 
+const VAPID_PUBLIC_KEY = "BKtILo7T0HPTkLHqmeIAl9pM_Du0rj5MKQB0u1nDGZ_XaxHaTj72A8Sr1Axdc1RmOWRxq4GMJx4gulnrqlHCQ1s";
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const rawData = atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; i++) outputArray[i] = rawData.charCodeAt(i);
+  return outputArray;
+}
+
 const CATEGORIES = [
   { id: "plage", label: "Plage", icon: Waves, color: C.lagonLight },
   { id: "rando", label: "Randonnée", icon: Mountain, color: C.mangrove },
@@ -400,6 +411,15 @@ function SotiMQ() {
   const [chatId, setChatId] = useState(null);
   const [showBanner, setShowBanner] = useState(true);
 
+  const [pushPermission, setPushPermission] = useState(
+    typeof Notification === "undefined" ? "unsupported" : Notification.permission
+  );
+  const [pushSubscribed, setPushSubscribed] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [showPushBanner, setShowPushBanner] = useState(
+    () => typeof localStorage !== "undefined" && localStorage.getItem("soti_push_banner_dismissed") !== "1"
+  );
+
   const [form, setForm] = useState({
     titre: "", categorie: "plage", commune: COMMUNES[0], lieu: "",
     date: "", heure: "", places: 6, description: "", en_ligne: false,
@@ -407,6 +427,25 @@ function SotiMQ() {
 
   const [busyAction, setBusyAction] = useState(false);
   const [actionError, setActionError] = useState("");
+
+  /* ---------- ouverture depuis une notification ---------- */
+  useEffect(() => {
+    if (location.hash === "#messages") setTab("messages");
+    if (location.hash) history.replaceState(null, "", location.pathname + location.search);
+  }, []);
+
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    function handleMessage(event) {
+      if (event.data && event.data.type === "notification-click") {
+        const hash = new URL(event.data.url).hash;
+        if (hash === "#messages") { setTab("messages"); setChatId(null); }
+        else setTab("fil");
+      }
+    }
+    navigator.serviceWorker.addEventListener("message", handleMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", handleMessage);
+  }, []);
 
   const chatEndRef = useRef(null);
   useEffect(() => {
@@ -419,6 +458,70 @@ function SotiMQ() {
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);
+
+  /* ---------- notifications push ---------- */
+  useEffect(() => {
+    if (!session || pushPermission !== "granted" || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.ready
+      .then((reg) => reg.pushManager.getSubscription())
+      .then((sub) => setPushSubscribed(!!sub))
+      .catch(() => {});
+  }, [session, pushPermission]);
+
+  async function enablePush() {
+    if (typeof Notification === "undefined" || !("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setActionError("Les notifications ne sont pas prises en charge par ce navigateur.");
+      return;
+    }
+    setPushBusy(true); setActionError("");
+    try {
+      const permission = await Notification.requestPermission();
+      setPushPermission(permission);
+      if (permission === "granted") {
+        const registration = await navigator.serviceWorker.ready;
+        let subscription = await registration.pushManager.getSubscription();
+        if (!subscription) {
+          subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
+          });
+        }
+        const json = subscription.toJSON();
+        const { error } = await supabase.from("push_subscriptions").upsert(
+          { user_id: session.user.id, endpoint: json.endpoint, p256dh: json.keys.p256dh, auth: json.keys.auth },
+          { onConflict: "endpoint" }
+        );
+        if (error) setActionError("Notifications non activées : " + error.message);
+        else setPushSubscribed(true);
+      }
+    } catch (e) {
+      setActionError("Notifications non activées : " + e.message);
+    }
+    setPushBusy(false);
+    setShowPushBanner(false);
+    localStorage.setItem("soti_push_banner_dismissed", "1");
+  }
+
+  async function disablePush() {
+    setPushBusy(true); setActionError("");
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+      if (subscription) {
+        await supabase.from("push_subscriptions").delete().eq("endpoint", subscription.endpoint);
+        await subscription.unsubscribe();
+      }
+      setPushSubscribed(false);
+    } catch (e) {
+      setActionError("Erreur lors de la désactivation : " + e.message);
+    }
+    setPushBusy(false);
+  }
+
+  function dismissPushBanner() {
+    setShowPushBanner(false);
+    localStorage.setItem("soti_push_banner_dismissed", "1");
+  }
 
   /* ---------- profile ---------- */
   useEffect(() => {
@@ -727,6 +830,20 @@ function SotiMQ() {
                   <button onClick={() => setActionError("")} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, color: C.corail }}><X size={14} /></button>
                 </div>
               )}
+              {showPushBanner && pushPermission === "default" && (
+                <div style={{
+                  margin: "12px 18px 0", background: "#EAF3E9", border: "1px solid " + C.lagon, borderRadius: 12,
+                  padding: "12px 14px", display: "flex", alignItems: "center", gap: 10,
+                  fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: C.encre,
+                }}>
+                  <Bell size={16} color={C.lagon} style={{ flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>Active les notifications pour être prévenu(e) des nouveaux messages et des nouvelles sorties.</div>
+                  <button onClick={enablePush} disabled={pushBusy} style={{ background: C.lagon, color: C.blanc, border: "none", borderRadius: 8, padding: "6px 10px", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 11.5, cursor: pushBusy ? "not-allowed" : "pointer", flexShrink: 0 }}>
+                    {pushBusy ? "..." : "Activer"}
+                  </button>
+                  <button onClick={dismissPushBanner} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0, color: "#5B6960" }}><X size={14} /></button>
+                </div>
+              )}
               {tab === "fil" && (
                 <FilTab
                   activities={filteredActivities} joinedIds={joinedIds} waitlistIds={waitlistIds} onOpen={setDetailId}
@@ -757,6 +874,11 @@ function SotiMQ() {
                   onSignOut={signOut}
                   onDeleteAccount={deleteAccount}
                   onOpenModeration={() => setTab("moderation")}
+                  pushPermission={pushPermission}
+                  pushSubscribed={pushSubscribed}
+                  pushBusy={pushBusy}
+                  onEnablePush={enablePush}
+                  onDisablePush={disablePush}
                   onUploadAvatar={async (file) => {
                     const r = await uploadAvatar(file);
                     if (r.ok) {
@@ -1405,7 +1527,7 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, onUploadAvatar, busy }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
@@ -1485,6 +1607,33 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
             </button>
           );
         })}
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
+          Notifications
+        </div>
+        {pushPermission === "unsupported" ? (
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960" }}>Non prises en charge par ce navigateur.</div>
+        ) : pushPermission === "denied" ? (
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960" }}>Bloquées dans les réglages du navigateur/téléphone. Autorise-les depuis les réglages pour les recevoir.</div>
+        ) : pushSubscribed ? (
+          <button onClick={onDisablePush} disabled={pushBusy} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 12,
+            border: "1.5px solid " + C.sableDark, background: C.blanc, fontFamily: "'Work Sans', sans-serif",
+            fontWeight: 600, fontSize: 13, cursor: pushBusy ? "not-allowed" : "pointer", color: C.encre,
+          }}>
+            <Check size={15} color={C.mangrove} /> {pushBusy ? "..." : "Activées — désactiver"}
+          </button>
+        ) : (
+          <button onClick={onEnablePush} disabled={pushBusy} style={{
+            display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderRadius: 12,
+            border: "1.5px solid " + C.lagon, background: C.blanc, fontFamily: "'Work Sans', sans-serif",
+            fontWeight: 600, fontSize: 13, cursor: pushBusy ? "not-allowed" : "pointer", color: C.lagon,
+          }}>
+            <Bell size={15} /> {pushBusy ? "..." : "Activer les notifications"}
+          </button>
+        )}
       </div>
 
       {profile.is_admin && (
