@@ -847,6 +847,15 @@ function SotiMQ() {
     return { ok: true };
   }
 
+  async function adminDeleteActivity(id) {
+    setBusyAction(true); setActionError("");
+    const { error } = await supabase.from("activities").delete().eq("id", id);
+    if (error) { setActionError("Suppression impossible : " + error.message); setBusyAction(false); return; }
+    setDetailId(null);
+    if (chatId === id) setChatId(null);
+    setBusyAction(false);
+  }
+
   async function submitFeedback(sujet, message) {
     const { error } = await supabase.from("feedback").insert({
       auteur_id: session.user.id, email: session.user.email, sujet, message,
@@ -1106,6 +1115,8 @@ function SotiMQ() {
                   onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
                   onReport={(motif, detail) => submitReport("activite", detailId, motif, detail)}
                   onReportProfile={(motif, detail) => submitReport("profil", getActivity(detailId).organisateur_id, motif, detail)}
+                  isAdmin={profile.is_admin}
+                  onAdminDelete={() => adminDeleteActivity(detailId)}
                   busy={busyAction}
                 />
               )}
@@ -1366,9 +1377,10 @@ function ReportPicker({ onSubmit, onCancel }) {
 
 /* --------------------------------- DETAIL SHEET --------------------------------- */
 
-function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, onReportProfile, busy }) {
+function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, onReportProfile, isAdmin, onAdminDelete, busy }) {
   const [showReport, setShowReport] = useState(false);
   const [showReportProfile, setShowReportProfile] = useState(false);
+  const [confirmingAdminDelete, setConfirmingAdminDelete] = useState(false);
   if (!activity) return null;
   const cat = catById(activity.categorie);
   const Icon = cat.icon;
@@ -1524,6 +1536,30 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
             ) : (
               <button onClick={() => setShowReport(true)} style={{ background: "none", border: "none", color: "#8a4a4a", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: "6px 0" }}>
                 Signaler cette sortie
+              </button>
+            )}
+          </div>
+        )}
+
+        {isAdmin && (
+          <div style={{ marginTop: 14, borderTop: "1px solid " + C.sableDark, paddingTop: 12 }}>
+            {confirmingAdminDelete ? (
+              <div style={{ background: "#FBE4DC", border: "1px solid " + C.corail, borderRadius: 12, padding: "12px 14px" }}>
+                <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: C.corail, marginBottom: 10 }}>
+                  Supprimer définitivement cette sortie (et ses messages) ? Action irréversible.
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setConfirmingAdminDelete(false)} disabled={busy} style={{ flex: 1, padding: "8px", borderRadius: 10, border: "1.5px solid " + C.sableDark, background: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>
+                    Annuler
+                  </button>
+                  <button onClick={onAdminDelete} disabled={busy} style={{ flex: 1, padding: "8px", borderRadius: 10, border: "none", background: C.corail, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12, cursor: busy ? "not-allowed" : "pointer", opacity: busy ? 0.6 : 1 }}>
+                    {busy ? "..." : "Confirmer"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => setConfirmingAdminDelete(true)} style={{ background: "none", border: "none", color: "#8a4a4a", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 12, cursor: "pointer", padding: "6px 0" }}>
+                🛡️ Supprimer cette sortie (admin)
               </button>
             )}
           </div>

@@ -436,3 +436,14 @@ create policy "feedback_delete_own"
   on public.feedback for delete
   to authenticated
   using (auth.uid() = auteur_id);
+
+
+-- ===================== Modération : suppression d'une sortie par un admin =====================
+-- Permet à un administrateur de supprimer n'importe quelle sortie, avec ou
+-- sans signalement préalable (participations et messages liés sont
+-- supprimés automatiquement via les contraintes on delete cascade).
+
+create policy "activities_delete_admin"
+  on public.activities for delete
+  to authenticated
+  using (public.is_admin());
