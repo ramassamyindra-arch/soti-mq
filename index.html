@@ -71,6 +71,11 @@ function detectSensitiveContent(text) {
   return null;
 }
 
+function membreDepuisLabel(dateStr) {
+  if (!dateStr) return "";
+  return new Date(dateStr).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+}
+
 function jitsiUrl(activityId) {
   return "https://meet.jit.si/SotiMQ-" + activityId.replace(/-/g, "");
 }
@@ -654,7 +659,7 @@ function SotiMQ() {
     const [{ data: acts }, { data: parts }, { data: profs }] = await Promise.all([
       supabase.from("activities").select("*").order("date", { ascending: true }),
       supabase.from("participations").select("*"),
-      supabase.from("profiles").select("id, prenom, commune, interests, avatar_url"),
+      supabase.from("profiles").select("id, prenom, commune, interests, avatar_url, created_at"),
     ]);
     setActivitiesRaw(acts || []);
     setParticipations(parts || []);
@@ -701,6 +706,9 @@ function SotiMQ() {
       ...a,
       organisateur: prenomOf(a.organisateur_id),
       organisateur_avatar: avatarOf(a.organisateur_id),
+      organisateur_membre_depuis: profilesById[a.organisateur_id] && profilesById[a.organisateur_id].created_at,
+      organisateur_sorties_organisees: activitiesRaw.filter((a2) => a2.organisateur_id === a.organisateur_id).length,
+      organisateur_sorties_rejointes: participations.filter((p) => p.user_id === a.organisateur_id && p.statut === "inscrit").length,
       inscrits: inscritsParts.map((p) => prenomOf(p.user_id)),
       inscrits_ids: inscritsParts.map((p) => p.user_id),
       liste_attente: attenteParts.map((p) => prenomOf(p.user_id)),
@@ -1359,9 +1367,16 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Organisé par
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: !isOwner ? 4 : 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: !isOwner ? 6 : 16 }}>
           <Avatar name={activity.organisateur} src={activity.organisateur_avatar} size={34} />
-          <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
+          <div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
+            {activity.organisateur_membre_depuis && (
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11, color: "#5B6960" }}>
+                Membre depuis {membreDepuisLabel(activity.organisateur_membre_depuis)} · {activity.organisateur_sorties_organisees} organisée{activity.organisateur_sorties_organisees > 1 ? "s" : ""} · {activity.organisateur_sorties_rejointes} rejointe{activity.organisateur_sorties_rejointes > 1 ? "s" : ""}
+              </div>
+            )}
+          </div>
         </div>
 
         {!isOwner && (
@@ -1720,6 +1735,11 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
           <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2 }}>
             <MapPin size={13} /> {profile.commune}
           </div>
+          {profile.created_at && (
+            <div style={{ color: "#9AA69E", fontFamily: "'Work Sans', sans-serif", fontSize: 11, marginTop: 2 }}>
+              Membre depuis {membreDepuisLabel(profile.created_at)}
+            </div>
+          )}
         </div>
         <button onClick={() => { if (editing) onSave(); setEditing((e) => !e); }} style={{ background: "none", border: "1.5px solid " + C.sableDark, borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}>
           {editing ? <Check size={15} color={C.mangrove} /> : <Pencil size={14} color={C.encre} />}
