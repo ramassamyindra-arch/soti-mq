@@ -354,3 +354,13 @@ create policy "push_subscriptions_delete_own"
 -- La fonction serveur qui envoie les notifications lit les abonnements avec
 -- la clé "service role" (qui contourne la RLS) : aucune policy de lecture
 -- supplémentaire n'est nécessaire pour elle.
+
+
+-- ===================== Export de données (portabilité RGPD) =====================
+-- Permet à chaque membre de lire ses propres signalements, nécessaire pour
+-- que l'export "mes données" depuis le profil soit complet.
+
+create policy "reports_select_own"
+  on public.reports for select
+  to authenticated
+  using (auth.uid() = signalant_id);

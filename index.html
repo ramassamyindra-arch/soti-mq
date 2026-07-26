@@ -36,7 +36,7 @@ import { createRoot } from "react-dom/client";
 import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
-  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video
+  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -843,6 +843,49 @@ function SotiMQ() {
     setBusyAction(false);
   }
 
+  async function exportMyData() {
+    setBusyAction(true); setActionError("");
+    try {
+      const uid = session.user.id;
+      const [messagesRes, participationsRes, reportsRes] = await Promise.all([
+        supabase.from("messages").select("activity_id, content, created_at").eq("author_id", uid).order("created_at", { ascending: true }),
+        supabase.from("participations").select("activity_id, statut, created_at").eq("user_id", uid).order("created_at", { ascending: true }),
+        supabase.from("reports").select("cible_type, cible_id, motif, detail, statut, created_at").eq("signalant_id", uid).order("created_at", { ascending: true }),
+      ]);
+      const firstError = messagesRes.error || participationsRes.error || reportsRes.error;
+      if (firstError) throw new Error(firstError.message);
+
+      const titreOf = (id) => activitiesRaw.find((a) => a.id === id)?.titre || "(sortie supprimée)";
+      const data = {
+        export_genere_le: new Date().toISOString(),
+        profil: profile,
+        sorties_organisees: activitiesRaw
+          .filter((a) => a.organisateur_id === uid)
+          .map((a) => ({
+            titre: a.titre, categorie: a.categorie, commune: a.commune, lieu: a.lieu,
+            date: a.date, heure: a.heure, places: a.places, description: a.description,
+            en_ligne: a.en_ligne, created_at: a.created_at,
+          })),
+        participations: participationsRes.data.map((p) => ({ sortie: titreOf(p.activity_id), statut: p.statut, date_inscription: p.created_at })),
+        messages_envoyes: messagesRes.data.map((m) => ({ sortie: titreOf(m.activity_id), contenu: m.content, date: m.created_at })),
+        signalements_effectues: reportsRes.data,
+      };
+
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "soti-mq-mes-donnees.json";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setActionError("Export impossible : " + e.message);
+    }
+    setBusyAction(false);
+  }
+
   const formValid = form.titre && (form.lieu || form.en_ligne) && form.date && form.heure && !!profile.avatar_url;
 
   const filteredActivities = activities.filter((a) =>
@@ -987,6 +1030,7 @@ function SotiMQ() {
                   onSave={saveProfile}
                   onSignOut={signOut}
                   onDeleteAccount={deleteAccount}
+                  onExportData={exportMyData}
                   onOpenModeration={() => setTab("moderation")}
                   pushPermission={pushPermission}
                   pushSubscribed={pushSubscribed}
@@ -1641,7 +1685,7 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onOpenModeration, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onExportData, onOpenModeration, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
@@ -1759,6 +1803,14 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
           <Users size={15} /> Modération
         </button>
       )}
+
+      <button onClick={onExportData} disabled={busy} style={{
+        width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.sableDark, background: C.blanc,
+        color: C.encre, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: busy ? "not-allowed" : "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 12, opacity: busy ? 0.6 : 1,
+      }}>
+        <Download size={15} /> {busy ? "Export en cours..." : "Exporter mes données"}
+      </button>
 
       <button onClick={onSignOut} style={{
         width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.corail, background: C.blanc,
