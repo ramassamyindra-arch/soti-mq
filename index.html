@@ -71,6 +71,27 @@ function detectSensitiveContent(text) {
   return null;
 }
 
+function getActivityBadge(total) {
+  if (total >= 30) return { label: "Pilier", color: C.soleil };
+  if (total >= 15) return { label: "Habitué", color: C.lagonLight };
+  if (total >= 5) return { label: "Actif", color: C.mangrove };
+  return null;
+}
+
+function ActivityBadge({ total }) {
+  const badge = getActivityBadge(total);
+  if (!badge) return null;
+  return (
+    <span style={{
+      display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 999,
+      background: badge.color + "1A", color: badge.color, border: "1px solid " + badge.color,
+      fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 10.5, whiteSpace: "nowrap",
+    }}>
+      <Sparkles size={10} /> {badge.label}
+    </span>
+  );
+}
+
 function membreDepuisLabel(dateStr) {
   if (!dateStr) return "";
   return new Date(dateStr).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -1382,7 +1403,10 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: !isOwner ? 6 : 16 }}>
           <Avatar name={activity.organisateur} src={activity.organisateur_avatar} size={34} />
           <div>
-            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
+              <ActivityBadge total={activity.organisateur_sorties_organisees + activity.organisateur_sorties_rejointes} />
+            </div>
             {activity.organisateur_membre_depuis && (
               <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11, color: "#5B6960" }}>
                 Membre depuis {membreDepuisLabel(activity.organisateur_membre_depuis)} · {activity.organisateur_sorties_organisees} organisée{activity.organisateur_sorties_organisees > 1 ? "s" : ""} · {activity.organisateur_sorties_rejointes} rejointe{activity.organisateur_sorties_rejointes > 1 ? "s" : ""}
@@ -1742,7 +1766,10 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
           {editing ? (
             <input value={profile.prenom} onChange={(e) => setProfile((p) => ({ ...p, prenom: e.target.value }))} style={{ ...inputStyle, padding: "8px 10px", fontSize: 16, fontFamily: "'Fraunces', serif", fontWeight: 600 }} />
           ) : (
-            <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}{profile.age ? `, ${profile.age}` : ""}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+              <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}{profile.age ? `, ${profile.age}` : ""}</div>
+              <ActivityBadge total={organisedCount + joinedCount} />
+            </div>
           )}
           <div style={{ display: "flex", alignItems: "center", gap: 4, color: "#5B6960", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2 }}>
             <MapPin size={13} /> {profile.commune}
