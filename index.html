@@ -1058,6 +1058,7 @@ function SotiMQ() {
                   onJoin={() => joinActivity(detailId)} onLeave={() => leaveActivity(detailId)}
                   onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
                   onReport={(motif, detail) => submitReport("activite", detailId, motif, detail)}
+                  onReportProfile={(motif, detail) => submitReport("profil", getActivity(detailId).organisateur_id, motif, detail)}
                   busy={busyAction}
                 />
               )}
@@ -1255,6 +1256,7 @@ function EmptyState({ text }) {
 const MOTIFS_SIGNALEMENT = [
   "Comportement déplacé",
   "Profil suspect",
+  "Photo de profil inappropriée",
   "Contenu inapproprié",
   "Sollicitation romantique/commerciale",
   "Autre",
@@ -1314,8 +1316,9 @@ function ReportPicker({ onSubmit, onCancel }) {
 
 /* --------------------------------- DETAIL SHEET --------------------------------- */
 
-function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, busy }) {
+function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, onReportProfile, busy }) {
   const [showReport, setShowReport] = useState(false);
+  const [showReportProfile, setShowReportProfile] = useState(false);
   if (!activity) return null;
   const cat = catById(activity.categorie);
   const Icon = cat.icon;
@@ -1356,10 +1359,22 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Organisé par
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: !isOwner ? 4 : 16 }}>
           <Avatar name={activity.organisateur} src={activity.organisateur_avatar} size={34} />
           <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 14 }}>{activity.organisateur}{isOwner && " (toi)"}</div>
         </div>
+
+        {!isOwner && (
+          <div style={{ marginBottom: 16 }}>
+            {showReportProfile ? (
+              <ReportPicker onSubmit={onReportProfile} onCancel={() => setShowReportProfile(false)} />
+            ) : (
+              <button onClick={() => setShowReportProfile(true)} style={{ background: "none", border: "none", color: "#8a4a4a", fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer", padding: "4px 0" }}>
+                Signaler ce profil
+              </button>
+            )}
+          </div>
+        )}
 
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>
           Participants
@@ -1888,19 +1903,25 @@ function ModerationTab({ onBack }) {
     setReports(reportsData || []);
 
     const activityIds = [...new Set((reportsData || []).filter((r) => r.cible_type === "activite").map((r) => r.cible_id))];
-    if (activityIds.length === 0) { setActivitiesById({}); setProfilesById({}); return; }
+    const reportedProfileIds = [...new Set((reportsData || []).filter((r) => r.cible_type === "profil").map((r) => r.cible_id))];
 
-    const { data: activitiesData } = await supabase.from("activities").select("*").in("id", activityIds);
-    const actMap = {};
-    (activitiesData || []).forEach((a) => { actMap[a.id] = a; });
+    let actMap = {};
+    let organisateurIds = [];
+    if (activityIds.length > 0) {
+      const { data: activitiesData } = await supabase.from("activities").select("*").in("id", activityIds);
+      (activitiesData || []).forEach((a) => { actMap[a.id] = a; });
+      organisateurIds = [...new Set((activitiesData || []).map((a) => a.organisateur_id))];
+    }
     setActivitiesById(actMap);
 
-    const organisateurIds = [...new Set((activitiesData || []).map((a) => a.organisateur_id))];
-    if (organisateurIds.length > 0) {
-      const { data: profilesData } = await supabase.from("profiles").select("id, prenom, statut").in("id", organisateurIds);
+    const profileIds = [...new Set([...organisateurIds, ...reportedProfileIds])];
+    if (profileIds.length > 0) {
+      const { data: profilesData } = await supabase.from("profiles").select("id, prenom, statut, avatar_url").in("id", profileIds);
       const profMap = {};
       (profilesData || []).forEach((p) => { profMap[p.id] = p; });
       setProfilesById(profMap);
+    } else {
+      setProfilesById({});
     }
   }
 
@@ -1922,6 +1943,14 @@ function ModerationTab({ onBack }) {
     setBusyId(null);
   }
 
+  async function resetAvatar(userId) {
+    setBusyId(userId);
+    const { error: err } = await supabase.from("profiles").update({ avatar_url: null }).eq("id", userId);
+    if (err) setError(err.message);
+    else setProfilesById((prev) => ({ ...prev, [userId]: { ...prev[userId], avatar_url: null } }));
+    setBusyId(null);
+  }
+
   return (
     <div style={{ padding: "14px 18px 90px" }}>
       <button onClick={onBack} style={{ display: "flex", alignItems: "center", gap: 6, background: "none", border: "none", color: C.lagon, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13, cursor: "pointer", marginBottom: 14, padding: 0 }}>
@@ -1937,7 +1966,9 @@ function ModerationTab({ onBack }) {
       ) : (
         reports.map((r) => {
           const activity = r.cible_type === "activite" ? activitiesById[r.cible_id] : null;
+          const reportedProfile = r.cible_type === "profil" ? profilesById[r.cible_id] : null;
           const organisateur = activity ? profilesById[activity.organisateur_id] : null;
+          const targetUser = organisateur || reportedProfile;
           return (
             <div key={r.id} style={{ background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "14px 16px", marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 6 }}>
@@ -1948,12 +1979,21 @@ function ModerationTab({ onBack }) {
               </div>
               {r.detail && <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#3E4A43", marginBottom: 8 }}>{r.detail}</div>}
 
+              {reportedProfile && (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <Avatar name={reportedProfile.prenom} src={reportedProfile.avatar_url} size={40} />
+                  <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#3E4A43" }}>
+                    Profil signalé : <strong>{reportedProfile.prenom}</strong> ({STATUT_COMPTE_LABELS[reportedProfile.statut] || reportedProfile.statut})
+                  </div>
+                </div>
+              )}
+
               <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12, color: "#5B6960", marginBottom: 8 }}>
                 {activity ? (
                   <>Sortie : <strong>{activity.titre}</strong> — organisée par <strong>{organisateur ? organisateur.prenom : "?"}</strong>
                     {organisateur && <> ({STATUT_COMPTE_LABELS[organisateur.statut] || organisateur.statut})</>}
                   </>
-                ) : r.cible_type === "activite" ? "Sortie supprimée" : "Cible : " + r.cible_type}
+                ) : r.cible_type === "activite" ? "Sortie supprimée" : r.cible_type === "profil" && !reportedProfile ? "Profil supprimé" : null}
               </div>
 
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
@@ -1965,14 +2005,17 @@ function ModerationTab({ onBack }) {
                   {Object.entries(STATUT_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                 </select>
 
-                {organisateur && organisateur.statut !== "suspendu" && (
-                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "suspendu")} style={modBtnStyle(C.soleil)}>Suspendre</button>
+                {targetUser && targetUser.avatar_url && (
+                  <button disabled={busyId === targetUser.id} onClick={() => resetAvatar(targetUser.id)} style={modBtnStyle(C.encre)}>Retirer la photo</button>
                 )}
-                {organisateur && organisateur.statut !== "banni" && (
-                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "banni")} style={modBtnStyle(C.corail)}>Bannir</button>
+                {targetUser && targetUser.statut !== "suspendu" && (
+                  <button disabled={busyId === targetUser.id} onClick={() => setUserStatut(targetUser.id, "suspendu")} style={modBtnStyle(C.soleil)}>Suspendre</button>
                 )}
-                {organisateur && organisateur.statut !== "actif" && (
-                  <button disabled={busyId === organisateur.id} onClick={() => setUserStatut(organisateur.id, "actif")} style={modBtnStyle(C.mangrove)}>Réactiver</button>
+                {targetUser && targetUser.statut !== "banni" && (
+                  <button disabled={busyId === targetUser.id} onClick={() => setUserStatut(targetUser.id, "banni")} style={modBtnStyle(C.corail)}>Bannir</button>
+                )}
+                {targetUser && targetUser.statut !== "actif" && (
+                  <button disabled={busyId === targetUser.id} onClick={() => setUserStatut(targetUser.id, "actif")} style={modBtnStyle(C.mangrove)}>Réactiver</button>
                 )}
               </div>
             </div>
