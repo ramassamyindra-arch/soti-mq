@@ -37,7 +37,7 @@ import React, { useState, useRef, useEffect } from "react";
 import { createRoot } from "react-dom/client";
 import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
-  MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
+  MapPin, Users, Send, Plus, ChevronLeft, ChevronRight, Bell, MessageCircle,
   Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
   SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home
 } from "lucide-react";
@@ -2084,29 +2084,91 @@ const CALENDRIER_CATS = [
 
 const CALENDRIER_EMPTY_TEXT = {
   interesse: "Marque une sortie « Intéressé(e) » (petit cœur sur sa fiche) pour la retrouver ici.",
-  participe: "Tu ne participes à aucune sortie à venir pour l'instant. Direction la carte !",
-  organise: "Tu n'as pas encore organisé de sortie à venir.",
+  participe: "Tu ne participes à aucune sortie pour l'instant. Direction la carte !",
+  organise: "Tu n'as pas encore organisé de sortie.",
   passees: "Aucune sortie passée pour l'instant.",
 };
 
+function pad2(n) { return String(n).padStart(2, "0"); }
+
+function MonthCalendarGrid({ datesWithItems, icon: CatIcon, iconColor, filled, selectedDay, onSelectDay }) {
+  const [viewDate, setViewDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+  const year = viewDate.getFullYear();
+  const month = viewDate.getMonth();
+  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // lundi = 0
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const cells = [];
+  for (let i = 0; i < firstWeekday; i++) cells.push(null);
+  for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+  const monthLabel = viewDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  return (
+    <div style={{ background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 16, padding: "12px 14px", marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <button onClick={() => setViewDate(new Date(year, month - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+          <ChevronLeft size={18} color={C.encre} />
+        </button>
+        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15, color: C.encre, textTransform: "capitalize" }}>{monthLabel}</div>
+        <button onClick={() => setViewDate(new Date(year, month + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+          <ChevronRight size={18} color={C.encre} />
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2, marginBottom: 4 }}>
+        {["L", "M", "M", "J", "V", "S", "D"].map((d, i) => (
+          <div key={i} style={{ textAlign: "center", fontFamily: "'Work Sans', sans-serif", fontSize: 10, fontWeight: 700, color: "#9AA69E" }}>{d}</div>
+        ))}
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 2 }}>
+        {cells.map((day, idx) => {
+          if (day === null) return <div key={idx} />;
+          const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
+          const hasItem = datesWithItems.has(dateStr);
+          const isToday = dateStr === TODAY;
+          const isSelected = dateStr === selectedDay;
+          return (
+            <button
+              key={idx}
+              onClick={() => hasItem && onSelectDay(isSelected ? null : dateStr)}
+              style={{
+                aspectRatio: "1", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+                borderRadius: 10, border: isSelected ? "1.5px solid " + C.lagon : "1.5px solid transparent",
+                background: isToday ? C.sableDark : "transparent", cursor: hasItem ? "pointer" : "default", padding: 1,
+              }}
+            >
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, fontWeight: isToday ? 700 : 500, color: C.encre }}>{day}</div>
+              <div style={{ height: 10, display: "flex", alignItems: "center" }}>
+                {hasItem && <CatIcon size={9} color={iconColor} fill={filled ? iconColor : "none"} />}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) {
   const [calTab, setCalTab] = useState("interesse");
-
-  const upcoming = activities.filter((a) => a.date >= TODAY);
-  const past = activities.filter((a) =>
-    a.date < TODAY && (a.organisateur_id === myId || joinedIds.includes(a.id) || interestIds.includes(a.id))
-  );
+  const [selectedDay, setSelectedDay] = useState(null);
 
   const lists = {
-    interesse: upcoming.filter((a) => interestIds.includes(a.id)),
-    participe: upcoming.filter((a) => joinedIds.includes(a.id)),
-    organise: upcoming.filter((a) => a.organisateur_id === myId),
-    passees: past,
+    interesse: activities.filter((a) => interestIds.includes(a.id)),
+    participe: activities.filter((a) => joinedIds.includes(a.id)),
+    organise: activities.filter((a) => a.organisateur_id === myId),
+    passees: activities.filter((a) =>
+      a.date < TODAY && (a.organisateur_id === myId || joinedIds.includes(a.id) || interestIds.includes(a.id))
+    ),
   };
 
+  const currentCat = CALENDRIER_CATS.find((c) => c.id === calTab);
+  const datesWithItems = new Set(lists[calTab].map((a) => a.date));
+  const dayFiltered = selectedDay ? lists[calTab].filter((a) => a.date === selectedDay) : lists[calTab];
   const sorted = calTab === "passees"
-    ? [...lists[calTab]].sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure))
-    : [...lists[calTab]].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
+    ? [...dayFiltered].sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure))
+    : [...dayFiltered].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
 
   return (
     <div style={{ padding: "10px 18px 90px" }}>
@@ -2117,7 +2179,7 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
           return (
             <button
               key={c.id}
-              onClick={() => setCalTab(c.id)}
+              onClick={() => { setCalTab(c.id); setSelectedDay(null); }}
               style={{
                 display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999,
                 border: "1.5px solid " + (active ? C.lagon : C.sableDark), background: active ? C.lagon : C.blanc,
@@ -2131,6 +2193,21 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
           );
         })}
       </div>
+
+      <MonthCalendarGrid
+        datesWithItems={datesWithItems}
+        icon={currentCat.icon}
+        iconColor={C.corail}
+        filled={calTab === "interesse"}
+        selectedDay={selectedDay}
+        onSelectDay={setSelectedDay}
+      />
+
+      {selectedDay && (
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", marginBottom: 10, textTransform: "capitalize" }}>
+          {new Date(selectedDay + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+        </div>
+      )}
 
       {sorted.length === 0 ? (
         <EmptyState text={CALENDRIER_EMPTY_TEXT[calTab]} />
