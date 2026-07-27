@@ -38,7 +38,8 @@ import { createRoot } from "react-dom/client";
 import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
-  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail
+  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
+  Search, SlidersHorizontal
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -243,7 +244,7 @@ function ActivityMap({ activities, onOpen }) {
     return () => { cancelled = true; };
   }, [activities]);
 
-  return <div ref={mapRef} style={{ width: "100%", height: 240, borderRadius: 16, overflow: "hidden" }} />;
+  return <div ref={mapRef} style={{ width: "100%", height: "100%" }} />;
 }
 
 /* ------------------------------- SOUS-COMPOSANTS ------------------------------- */
@@ -1118,32 +1119,33 @@ function SotiMQ() {
         ) : (
           <>
             {/* HEADER */}
-            <div style={{ background: C.lagon, padding: "14px 18px 0", flexShrink: 0 }}>
-              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 22, color: C.blanc, letterSpacing: 0.5 }}>
-                  Sòti <span style={{ color: C.soleil }}>MQ</span>
+            {tab !== "fil" && (
+              <div style={{ background: C.lagon, padding: "14px 18px 0", flexShrink: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 22, color: C.blanc, letterSpacing: 0.5 }}>
+                    Sòti <span style={{ color: C.soleil }}>MQ</span>
+                  </div>
+                  <button
+                    onClick={() => setShowBanner((s) => !s)}
+                    aria-label="Notifications"
+                    style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+                  >
+                    <Bell size={16} color={C.blanc} />
+                  </button>
                 </div>
-                <button
-                  onClick={() => setShowBanner((s) => !s)}
-                  aria-label="Notifications"
-                  style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
-                >
-                  <Bell size={16} color={C.blanc} />
-                </button>
+                <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2, marginBottom: 12 }}>
+                  {tab === "creer" && "Propose ta sortie à la communauté"}
+                  {tab === "messages" && "Tes conversations"}
+                  {tab === "profil" && "Ton profil"}
+                  {tab === "contact" && "Nous contacter"}
+                  {tab === "moderation" && "Modération — signalements"}
+                </div>
+                <Wave color={C.sable} height={16} />
               </div>
-              <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2, marginBottom: 12 }}>
-                {tab === "fil" && `Annou sòti, ${profile.prenom || "manzè/misye"} !`}
-                {tab === "creer" && "Propose ta sortie à la communauté"}
-                {tab === "messages" && "Tes conversations"}
-                {tab === "profil" && "Ton profil"}
-                {tab === "contact" && "Nous contacter"}
-                {tab === "moderation" && "Modération — signalements"}
-              </div>
-              <Wave color={C.sable} height={16} />
-            </div>
+            )}
 
             {/* CONTENT */}
-            <div style={{ flex: 1, overflowY: "auto", background: C.sable, position: "relative" }}>
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowY: tab === "fil" ? "hidden" : "auto", background: C.sable, position: "relative" }}>
               {actionError && (
                 <div style={{
                   margin: "12px 18px 0", background: "#FBE4DC", border: "1px solid " + C.corail, borderRadius: 12,
@@ -1175,6 +1177,10 @@ function SotiMQ() {
                   filterCommune={filterCommune} setFilterCommune={setFilterCommune}
                   showBanner={showBanner} setShowBanner={setShowBanner}
                   onCreateNew={() => setTab("creer")}
+                  profile={profile}
+                  onOpenProfil={() => setTab("profil")}
+                  onOpenMessages={() => setTab("messages")}
+                  messagesCount={myConversations.length}
                 />
               )}
               {tab === "creer" && (
@@ -1384,50 +1390,121 @@ function Onboarding({ obStep, setObStep, profile, setProfile, toggleInterest, fi
 
 /* ----------------------------------- FIL TAB ----------------------------------- */
 
-function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew }) {
+function MapRoundBtn({ onClick, children, badge }) {
   return (
-    <div style={{ padding: "14px 18px 90px" }}>
-      {showBanner && (
-        <div style={{ background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", marginBottom: 14, display: "flex", alignItems: "flex-start", gap: 8, fontFamily: "'Work Sans', sans-serif", fontSize: 12 }}>
-          <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-          <div style={{ flex: 1 }}>Version de test connectée en direct — comptes et sorties sont réels.</div>
-          <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
+    <button
+      onClick={onClick}
+      style={{
+        position: "relative", width: 40, height: 40, borderRadius: "50%", background: C.blanc, border: "none",
+        display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 8px rgba(30,42,36,0.28)", cursor: "pointer",
+      }}
+    >
+      {children}
+      {!!badge && (
+        <div style={{ position: "absolute", top: -3, right: -3, background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 9.5, fontWeight: 700, minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", border: "1.5px solid " + C.blanc }}>
+          {badge}
         </div>
       )}
+    </button>
+  );
+}
 
-      <div className="scrollx" style={{ display: "flex", gap: 8, marginBottom: 10, paddingBottom: 2 }}>
-        <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
-        {CATEGORIES.map((c) => (
-          <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
-        ))}
-      </div>
-      <div className="scrollx" style={{ display: "flex", gap: 8, marginBottom: 16, paddingBottom: 2 }}>
-        <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
-        {COMMUNES.map((c) => (
-          <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
-        ))}
-      </div>
+function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew, profile, onOpenProfil, onOpenMessages, messagesCount }) {
+  const [showFilters, setShowFilters] = useState(false);
+  const activeFilters = (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0);
 
-      <div style={{ position: "relative", marginBottom: 16 }}>
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
+      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
         <ActivityMap activities={activities} onOpen={onOpen} />
+
+        <button
+          onClick={onOpenProfil}
+          aria-label="Ton profil"
+          style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
+        >
+          <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
+        </button>
+
+        <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
+          <MapRoundBtn onClick={() => setShowBanner((s) => !s)}><Bell size={17} color={C.lagon} /></MapRoundBtn>
+          <MapRoundBtn onClick={onOpenMessages} badge={messagesCount}><MessageCircle size={17} color={C.lagon} /></MapRoundBtn>
+        </div>
+
+        {showBanner && (
+          <div style={{
+            position: "absolute", top: 64, left: 14, right: 14, zIndex: 390,
+            background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 8,
+            fontFamily: "'Work Sans', sans-serif", fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+          }}>
+            <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <div style={{ flex: 1 }}>Version de test connectée en direct — comptes et sorties sont réels.</div>
+            <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
+          </div>
+        )}
+
+        <div style={{ position: "absolute", bottom: 14, left: 14, zIndex: 400 }}>
+          <MapRoundBtn onClick={() => setShowFilters(true)}><Search size={17} color={C.lagon} /></MapRoundBtn>
+        </div>
+
         <button
           onClick={onCreateNew}
           aria-label="Proposer une sortie"
           style={{
-            position: "absolute", bottom: 12, right: 12, width: 48, height: 48, borderRadius: "50%",
+            position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)", width: 54, height: 54, borderRadius: "50%",
             background: C.corail, color: C.blanc, border: "none", display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 10px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 400,
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 400,
           }}
         >
-          <Plus size={22} />
+          <Plus size={24} />
         </button>
+
+        <div style={{ position: "absolute", bottom: 14, right: 14, zIndex: 400 }}>
+          <MapRoundBtn onClick={() => setShowFilters(true)} badge={activeFilters}><SlidersHorizontal size={17} color={C.lagon} /></MapRoundBtn>
+        </div>
+
+        {showFilters && (
+          <div style={{ position: "absolute", inset: 0, zIndex: 500, background: "rgba(30,42,36,0.45)" }} onClick={() => setShowFilters(false)}>
+            <div onClick={(e) => e.stopPropagation()} style={{
+              position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "72%", overflowY: "auto",
+              background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
+            }}>
+              <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Catégorie</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+                <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
+                {CATEGORIES.map((c) => (
+                  <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
+                ))}
+              </div>
+              <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Commune</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+                <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
+                {COMMUNES.map((c) => (
+                  <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
+                ))}
+              </div>
+              <button onClick={() => setShowFilters(false)} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
+                Voir {activities.length} sortie{activities.length > 1 ? "s" : ""}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
-      {activities.length === 0 ? (
-        <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
-      ) : (
-        activities.map((a) => <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />)
-      )}
+      <div style={{ flexShrink: 0, background: C.sable, borderTop: "1px solid " + C.sableDark, padding: "12px 14px" }}>
+        {activities.length === 0 ? (
+          <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
+        ) : (
+          <div className="scrollx" style={{ display: "flex", gap: 10 }}>
+            {activities.map((a) => (
+              <div key={a.id} style={{ width: 290, flexShrink: 0 }}>
+                <TicketCard activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
