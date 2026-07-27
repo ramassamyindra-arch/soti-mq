@@ -1461,7 +1461,7 @@ function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilt
       </div>
 
       {showFilters && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 500, background: "rgba(30,42,36,0.45)" }} onClick={() => setShowFilters(false)}>
+        <div style={{ position: "absolute", inset: 0, zIndex: 1500, background: "rgba(30,42,36,0.45)" }} onClick={() => setShowFilters(false)}>
           <div onClick={(e) => e.stopPropagation()} style={{
             position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "72%", overflowY: "auto",
             background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
@@ -1505,7 +1505,7 @@ function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilt
       </button>
 
       {showList && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 520, background: C.sable, display: "flex", flexDirection: "column" }}>
+        <div style={{ position: "absolute", inset: 0, zIndex: 1500, background: C.sable, display: "flex", flexDirection: "column" }}>
           <button
             onClick={() => setShowList(false)}
             style={{
@@ -1620,7 +1620,7 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
   const myWaitlistPosition = waitlisted ? activity.liste_attente_ids.indexOf(myId) + 1 : 0;
 
   return (
-    <div style={{ position: "absolute", inset: 0, zIndex: 20 }}>
+    <div style={{ position: "absolute", inset: 0, zIndex: 1500 }}>
       <div onClick={onClose} style={{ position: "absolute", inset: 0, background: "rgba(30,42,36,0.45)" }} />
       <div className="sheet" style={{
         position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "88%", background: C.blanc,
