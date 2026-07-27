@@ -2203,11 +2203,17 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
         onSelectDay={setSelectedDay}
       />
 
-      {selectedDay && (
-        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", marginBottom: 10, textTransform: "capitalize" }}>
-          {new Date(selectedDay + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "capitalize" }}>
+          {selectedDay
+            ? new Date(selectedDay + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
+            : "Toutes les activités"}
         </div>
-      )}
+        <div style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12, color: C.corail, flexShrink: 0 }}>
+          <Sparkles size={13} color={C.corail} />
+          {sorted.length} activité{sorted.length > 1 ? "s" : ""}
+        </div>
+      </div>
 
       {sorted.length === 0 ? (
         <EmptyState text="Rejoins, organise ou marque une sortie « Intéressé(e) » (petit cœur sur sa fiche) pour la retrouver ici." />
