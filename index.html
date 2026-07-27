@@ -730,6 +730,30 @@ function SotiMQ() {
   const [chatId, setChatId] = useState(null);
   const [showBanner, setShowBanner] = useState(true);
 
+  const [dragY, setDragY] = useState(0);
+  const dragState = useRef({ startY: 0, dragging: false });
+
+  function closeScreen() {
+    setTab("fil");
+    setChatId(null);
+  }
+  function handleDragStart(e) {
+    dragState.current = { startY: e.clientY, dragging: true };
+  }
+  function handleDragMove(e) {
+    if (!dragState.current.dragging) return;
+    const delta = e.clientY - dragState.current.startY;
+    if (delta > 0) setDragY(delta);
+  }
+  function handleDragEnd() {
+    if (!dragState.current.dragging) return;
+    dragState.current.dragging = false;
+    setDragY((d) => {
+      if (d > 70) closeScreen();
+      return 0;
+    });
+  }
+
   const [pushPermission, setPushPermission] = useState(
     typeof Notification === "undefined" ? "unsupported" : Notification.permission
   );
@@ -1207,17 +1231,27 @@ function SotiMQ() {
           <>
             {/* HEADER */}
             {tab !== "fil" && (
-              <div style={{ background: C.lagon, padding: "14px 18px 0", flexShrink: 0 }}>
+              <div
+                onPointerDown={handleDragStart}
+                onPointerMove={handleDragMove}
+                onPointerUp={handleDragEnd}
+                onPointerCancel={handleDragEnd}
+                style={{
+                  background: C.lagon, padding: "14px 18px 0", flexShrink: 0, touchAction: "none", cursor: "grab",
+                  transform: dragY ? `translateY(${dragY}px)` : undefined,
+                  transition: dragY ? "none" : "transform 0.2s ease",
+                }}
+              >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                   <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 22, color: C.blanc, letterSpacing: 0.5 }}>
                     Sòti <span style={{ color: C.soleil }}>MQ</span>
                   </div>
                   <button
-                    onClick={() => { setTab("fil"); setChatId(null); }}
-                    aria-label="Retour à la carte"
+                    onClick={closeScreen}
+                    aria-label="Fermer"
                     style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                   >
-                    <MapPin size={16} color={C.blanc} />
+                    <X size={17} color={C.blanc} />
                   </button>
                 </div>
                 <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2, marginBottom: 12 }}>
@@ -1233,7 +1267,12 @@ function SotiMQ() {
             )}
 
             {/* CONTENT */}
-            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowY: tab === "fil" ? "hidden" : "auto", background: C.sable, position: "relative" }}>
+            <div style={{
+              flex: 1, minHeight: 0, display: "flex", flexDirection: "column", overflowY: tab === "fil" ? "hidden" : "auto", background: C.sable, position: "relative",
+              transform: dragY ? `translateY(${dragY}px)` : undefined,
+              transition: dragY ? "none" : "transform 0.2s ease",
+              opacity: dragY ? Math.max(1 - dragY / 400, 0.55) : 1,
+            }}>
               {actionError && (
                 <div style={{
                   margin: "12px 18px 0", background: "#FBE4DC", border: "1px solid " + C.corail, borderRadius: 12,
