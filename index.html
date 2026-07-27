@@ -1638,7 +1638,6 @@ function FilTab({
   const activeFilters =
     (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0) +
     (filterDate !== "any" ? 1 : 0) + (filterFormat !== "toutes" ? 1 : 0);
-  const communeLabel = filterCommune === "Toutes" ? "Toute la Martinique" : filterCommune;
 
   function resetFilters() {
     setFilterCat("Toutes");
@@ -1792,7 +1791,10 @@ function FilTab({
       >
         <ChevronUp size={18} color="#9AA69E" />
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, color: C.encre }}>
-          {activities.length} sortie{activities.length > 1 ? "s" : ""} · {communeLabel}
+          Activités autour de {profile.commune}
+        </div>
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11, color: "#9AA69E" }}>
+          Glisse vers le haut pour les découvrir
         </div>
       </button>
 
@@ -1816,7 +1818,7 @@ function FilTab({
           >
             <ChevronDown size={18} color="#9AA69E" />
             <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, color: C.encre }}>
-              {activities.length} sortie{activities.length > 1 ? "s" : ""} · {communeLabel}
+              Activités autour de {profile.commune}
             </div>
           </button>
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px 90px" }}>
