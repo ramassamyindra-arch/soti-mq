@@ -2085,11 +2085,7 @@ const calCatById = (id) => CALENDRIER_CATS.find((c) => c.id === id);
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 
-function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay }) {
-  const [viewDate, setViewDate] = useState(() => {
-    const d = new Date();
-    return new Date(d.getFullYear(), d.getMonth(), 1);
-  });
+function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay, viewDate, onChangeMonth }) {
   const year = viewDate.getFullYear();
   const month = viewDate.getMonth();
   const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // lundi = 0
@@ -2102,11 +2098,11 @@ function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay }) {
   return (
     <div style={{ background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 16, padding: "12px 14px", marginBottom: 16 }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <button onClick={() => setViewDate(new Date(year, month - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+        <button onClick={() => onChangeMonth(new Date(year, month - 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
           <ChevronLeft size={18} color={C.encre} />
         </button>
         <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15, color: C.encre, textTransform: "capitalize" }}>{monthLabel}</div>
-        <button onClick={() => setViewDate(new Date(year, month + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
+        <button onClick={() => onChangeMonth(new Date(year, month + 1, 1))} style={{ background: "none", border: "none", cursor: "pointer", padding: 4 }}>
           <ChevronRight size={18} color={C.encre} />
         </button>
       </div>
@@ -2156,6 +2152,18 @@ function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay }) {
 
 function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) {
   const [selectedDay, setSelectedDay] = useState(null);
+  const [viewDate, setViewDate] = useState(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), 1);
+  });
+
+  function changeMonth(newDate) {
+    setViewDate(newDate);
+    setSelectedDay(null);
+  }
+
+  const monthStart = `${viewDate.getFullYear()}-${pad2(viewDate.getMonth() + 1)}-01`;
+  const monthEnd = `${viewDate.getFullYear()}-${pad2(viewDate.getMonth() + 1)}-${pad2(new Date(viewDate.getFullYear(), viewDate.getMonth() + 1, 0).getDate())}`;
 
   const catLists = {
     interesse: activities.filter((a) => interestIds.includes(a.id)),
@@ -2178,8 +2186,10 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
   });
 
   const allEntries = Array.from(entriesById.values());
-  const dayFiltered = selectedDay ? allEntries.filter((e) => e.activity.date === selectedDay) : allEntries;
-  const sorted = [...dayFiltered].sort((a, b) => (a.activity.date + a.activity.heure).localeCompare(b.activity.date + b.activity.heure));
+  const filtered = selectedDay
+    ? allEntries.filter((e) => e.activity.date === selectedDay)
+    : allEntries.filter((e) => e.activity.date >= monthStart && e.activity.date <= monthEnd);
+  const sorted = [...filtered].sort((a, b) => (a.activity.date + a.activity.heure).localeCompare(b.activity.date + b.activity.heure));
 
   return (
     <div style={{ padding: "10px 18px 90px" }}>
@@ -2201,13 +2211,15 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
         dateCategories={dateCategories}
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
+        viewDate={viewDate}
+        onChangeMonth={changeMonth}
       />
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, gap: 8 }}>
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "capitalize" }}>
           {selectedDay
             ? new Date(selectedDay + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })
-            : "Toutes les activités"}
+            : viewDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" })}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 5, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12, color: C.corail, flexShrink: 0 }}>
           <Sparkles size={13} color={C.corail} />
