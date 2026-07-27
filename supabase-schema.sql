@@ -447,3 +447,34 @@ create policy "activities_delete_admin"
   on public.activities for delete
   to authenticated
   using (public.is_admin());
+
+
+-- ===================== Mon calendrier : sorties "intéressé(e)" =====================
+-- Permet à un membre de marquer une sortie comme "intéressé(e)" (sans s'y
+-- inscrire), pour la retrouver dans l'onglet "Mon calendrier".
+
+create table public.interets (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  activity_id uuid not null references public.activities(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (user_id, activity_id)
+);
+alter table public.interets enable row level security;
+
+create policy "interets_select_own"
+  on public.interets for select
+  to authenticated
+  using (auth.uid() = user_id);
+
+create policy "interets_insert_own"
+  on public.interets for insert
+  to authenticated
+  with check (auth.uid() = user_id);
+
+create policy "interets_delete_own"
+  on public.interets for delete
+  to authenticated
+  using (auth.uid() = user_id);
+
+alter publication supabase_realtime add table public.interets;

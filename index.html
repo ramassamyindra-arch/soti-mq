@@ -39,7 +39,7 @@ import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
   Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
-  SlidersHorizontal, Calendar, ChevronUp, ChevronDown
+  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -715,6 +715,7 @@ function SotiMQ() {
 
   const [activitiesRaw, setActivitiesRaw] = useState([]);
   const [participations, setParticipations] = useState([]);
+  const [interets, setInterets] = useState([]);
   const [profilesById, setProfilesById] = useState({});
   const [chatMessages, setChatMessages] = useState([]);
 
@@ -864,13 +865,15 @@ function SotiMQ() {
 
   /* ---------- data: activities + participations + profiles ---------- */
   async function refreshCommunity() {
-    const [{ data: acts }, { data: parts }, { data: profs }] = await Promise.all([
+    const [{ data: acts }, { data: parts }, { data: prof_interets }, { data: profs }] = await Promise.all([
       supabase.from("activities").select("*").order("date", { ascending: true }),
       supabase.from("participations").select("*"),
+      supabase.from("interets").select("*"),
       supabase.from("profiles").select("id, prenom, commune, interests, avatar_url, created_at"),
     ]);
     setActivitiesRaw(acts || []);
     setParticipations(parts || []);
+    setInterets(prof_interets || []);
     const map = {};
     (profs || []).forEach((p) => { map[p.id] = p; });
     setProfilesById(map);
@@ -883,9 +886,22 @@ function SotiMQ() {
       .channel("community-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, refreshCommunity)
       .on("postgres_changes", { event: "*", schema: "public", table: "participations" }, refreshCommunity)
+      .on("postgres_changes", { event: "*", schema: "public", table: "interets" }, refreshCommunity)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session, profile]);
+
+  async function toggleInteret(activityId) {
+    const existing = interets.find((i) => i.activity_id === activityId);
+    if (existing) {
+      setInterets((prev) => prev.filter((i) => i.id !== existing.id));
+      await supabase.from("interets").delete().eq("id", existing.id);
+    } else {
+      const tempId = "temp-" + activityId;
+      setInterets((prev) => [...prev, { id: tempId, user_id: session.user.id, activity_id: activityId }]);
+      await supabase.from("interets").insert({ user_id: session.user.id, activity_id: activityId });
+    }
+  }
 
   /* ---------- chat realtime ---------- */
   useEffect(() => {
@@ -927,6 +943,7 @@ function SotiMQ() {
   const getActivity = (id) => activities.find((a) => a.id === id);
   const joinedIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "inscrit").map((p) => p.activity_id) : [];
   const waitlistIds = session ? participations.filter((p) => p.user_id === session.user.id && p.statut === "liste_attente").map((p) => p.activity_id) : [];
+  const interestIds = session ? interets.filter((i) => i.user_id === session.user.id).map((i) => i.activity_id) : [];
 
   function toggleInterest(id) {
     setObDraft((p) => ({
@@ -1303,7 +1320,7 @@ function SotiMQ() {
               {tab === "moderation" && profile.is_admin && <ModerationTab onBack={() => setTab("profil")} />}
               {tab === "calendrier" && (
                 <MonCalendrierTab
-                  activities={activities} myId={profile.id} joinedIds={joinedIds}
+                  activities={activities} myId={profile.id} joinedIds={joinedIds} interestIds={interestIds}
                   onOpen={setDetailId}
                 />
               )}
@@ -1312,6 +1329,8 @@ function SotiMQ() {
                 <DetailSheet
                   activity={getActivity(detailId)} joined={joinedIds.includes(detailId)}
                   waitlisted={waitlistIds.includes(detailId)}
+                  interested={interestIds.includes(detailId)}
+                  onToggleInteret={() => toggleInteret(detailId)}
                   myId={profile.id} onClose={() => setDetailId(null)}
                   onJoin={() => joinActivity(detailId)} onLeave={() => leaveActivity(detailId)}
                   onChat={() => { setTab("messages"); setChatId(detailId); setDetailId(null); }}
@@ -1731,7 +1750,7 @@ function ReportPicker({ onSubmit, onCancel }) {
 
 /* --------------------------------- DETAIL SHEET --------------------------------- */
 
-function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLeave, onChat, onReport, onReportProfile, isAdmin, onAdminDelete, busy }) {
+function DetailSheet({ activity, joined, waitlisted, interested, onToggleInteret, myId, onClose, onJoin, onLeave, onChat, onReport, onReportProfile, isAdmin, onAdminDelete, busy }) {
   const [showReport, setShowReport] = useState(false);
   const [showReportProfile, setShowReportProfile] = useState(false);
   const [confirmingAdminDelete, setConfirmingAdminDelete] = useState(false);
@@ -1752,11 +1771,22 @@ function DetailSheet({ activity, joined, waitlisted, myId, onClose, onJoin, onLe
       }}>
         <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 14px" }} />
 
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-            <Icon size={18} color={C.blanc} />
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <div style={{ width: 36, height: 36, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+              <Icon size={18} color={C.blanc} />
+            </div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: cat.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{cat.label}</div>
           </div>
-          <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: cat.color, textTransform: "uppercase", letterSpacing: 0.5 }}>{cat.label}</div>
+          {!isOwner && (
+            <button
+              onClick={onToggleInteret}
+              aria-label={interested ? "Ne plus être intéressé(e)" : "Je suis intéressé(e)"}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 4, flexShrink: 0, display: "flex" }}
+            >
+              <Heart size={22} color={C.corail} fill={interested ? C.corail : "none"} />
+            </button>
+          )}
         </div>
 
         <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 23, color: C.encre, lineHeight: 1.15, marginBottom: 10 }}>{activity.titre}</div>
@@ -2045,17 +2075,67 @@ function MessagesList({ conversations, onOpen }) {
   );
 }
 
-function MonCalendrierTab({ activities, myId, joinedIds, onOpen }) {
-  const mine = activities
-    .filter((a) => a.organisateur_id === myId || joinedIds.includes(a.id))
-    .sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
+const CALENDRIER_CATS = [
+  { id: "interesse", label: "Intéressé(e)", icon: Heart },
+  { id: "participe", label: "Je participe", icon: Users },
+  { id: "organise", label: "J'organise", icon: Home },
+  { id: "passees", label: "Passées", icon: Clock },
+];
+
+const CALENDRIER_EMPTY_TEXT = {
+  interesse: "Marque une sortie « Intéressé(e) » (petit cœur sur sa fiche) pour la retrouver ici.",
+  participe: "Tu ne participes à aucune sortie à venir pour l'instant. Direction la carte !",
+  organise: "Tu n'as pas encore organisé de sortie à venir.",
+  passees: "Aucune sortie passée pour l'instant.",
+};
+
+function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) {
+  const [calTab, setCalTab] = useState("interesse");
+
+  const upcoming = activities.filter((a) => a.date >= TODAY);
+  const past = activities.filter((a) =>
+    a.date < TODAY && (a.organisateur_id === myId || joinedIds.includes(a.id) || interestIds.includes(a.id))
+  );
+
+  const lists = {
+    interesse: upcoming.filter((a) => interestIds.includes(a.id)),
+    participe: upcoming.filter((a) => joinedIds.includes(a.id)),
+    organise: upcoming.filter((a) => a.organisateur_id === myId),
+    passees: past,
+  };
+
+  const sorted = calTab === "passees"
+    ? [...lists[calTab]].sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure))
+    : [...lists[calTab]].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
 
   return (
     <div style={{ padding: "10px 18px 90px" }}>
-      {mine.length === 0 ? (
-        <EmptyState text="Tu n'as pas encore de sortie à venir. Organise-en une ou rejoins-en une depuis la carte !" />
+      <div className="scrollx" style={{ display: "flex", gap: 8, marginBottom: 16, paddingBottom: 2 }}>
+        {CALENDRIER_CATS.map((c) => {
+          const Icon = c.icon;
+          const active = calTab === c.id;
+          return (
+            <button
+              key={c.id}
+              onClick={() => setCalTab(c.id)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, padding: "9px 14px", borderRadius: 999,
+                border: "1.5px solid " + (active ? C.lagon : C.sableDark), background: active ? C.lagon : C.blanc,
+                color: active ? C.blanc : C.encre, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5,
+                cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+              }}
+            >
+              <Icon size={14} color={active ? C.blanc : C.encre} fill={c.id === "interesse" ? (active ? C.blanc : "none") : "none"} />
+              {c.label} ({lists[c.id].length})
+            </button>
+          );
+        })}
+      </div>
+
+      {sorted.length === 0 ? (
+        <EmptyState text={CALENDRIER_EMPTY_TEXT[calTab]} />
       ) : (
-        mine.map((a) => (
+        sorted.map((a) => (
           <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={false} onOpen={onOpen} />
         ))
       )}
