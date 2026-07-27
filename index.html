@@ -38,8 +38,8 @@ import { createRoot } from "react-dom/client";
 import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, Bell, MessageCircle,
-  Home as HomeIcon, User, Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
-  Search, SlidersHorizontal
+  Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
+  SlidersHorizontal, Calendar, ChevronUp, ChevronDown
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -1126,11 +1126,11 @@ function SotiMQ() {
                     Sòti <span style={{ color: C.soleil }}>MQ</span>
                   </div>
                   <button
-                    onClick={() => setShowBanner((s) => !s)}
-                    aria-label="Notifications"
+                    onClick={() => { setTab("fil"); setChatId(null); }}
+                    aria-label="Retour à la carte"
                     style={{ background: "rgba(255,255,255,0.12)", border: "none", borderRadius: "50%", width: 34, height: 34, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
                   >
-                    <Bell size={16} color={C.blanc} />
+                    <MapPin size={16} color={C.blanc} />
                   </button>
                 </div>
                 <div style={{ color: "#CFEAE6", fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, marginTop: 2, marginBottom: 12 }}>
@@ -1139,6 +1139,7 @@ function SotiMQ() {
                   {tab === "profil" && "Ton profil"}
                   {tab === "contact" && "Nous contacter"}
                   {tab === "moderation" && "Modération — signalements"}
+                  {tab === "calendrier" && "Mon calendrier"}
                 </div>
                 <Wave color={C.sable} height={16} />
               </div>
@@ -1180,6 +1181,7 @@ function SotiMQ() {
                   profile={profile}
                   onOpenProfil={() => setTab("profil")}
                   onOpenMessages={() => setTab("messages")}
+                  onOpenCalendrier={() => setTab("calendrier")}
                   messagesCount={myConversations.length}
                 />
               )}
@@ -1225,6 +1227,12 @@ function SotiMQ() {
               )}
               {tab === "contact" && <ContactTab onBack={() => setTab("profil")} onSubmit={submitFeedback} />}
               {tab === "moderation" && profile.is_admin && <ModerationTab onBack={() => setTab("profil")} />}
+              {tab === "calendrier" && (
+                <MonCalendrierTab
+                  activities={activities} myId={profile.id} joinedIds={joinedIds}
+                  onOpen={setDetailId}
+                />
+              )}
 
               {detailId && (
                 <DetailSheet
@@ -1240,14 +1248,6 @@ function SotiMQ() {
                   busy={busyAction}
                 />
               )}
-            </div>
-
-            {/* BOTTOM TABS */}
-            <div style={{ display: "flex", borderTop: "1px solid " + C.sableDark, background: C.blanc, flexShrink: 0, paddingBottom: 6 }}>
-              <TabBtn icon={HomeIcon} label="Fil" active={tab === "fil"} onClick={() => { setTab("fil"); setChatId(null); }} />
-              <TabBtn icon={Plus} label="Créer" active={tab === "creer"} onClick={() => { setTab("creer"); setChatId(null); }} />
-              <TabBtn icon={MessageCircle} label="Messages" active={tab === "messages"} onClick={() => setTab("messages")} badge={myConversations.length} />
-              <TabBtn icon={User} label="Profil" active={tab === "profil"} onClick={() => { setTab("profil"); setChatId(null); }} />
             </div>
           </>
         )}
@@ -1409,102 +1409,126 @@ function MapRoundBtn({ onClick, children, badge }) {
   );
 }
 
-function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew, profile, onOpenProfil, onOpenMessages, messagesCount }) {
+function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, messagesCount }) {
   const [showFilters, setShowFilters] = useState(false);
+  const [showList, setShowList] = useState(false);
   const activeFilters = (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0);
+  const communeLabel = filterCommune === "Toutes" ? "Toute la Martinique" : filterCommune;
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", position: "relative" }}>
-      <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-        <ActivityMap activities={activities} onOpen={onOpen} />
+    <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
+      <ActivityMap activities={activities} onOpen={onOpen} />
 
-        <button
-          onClick={onOpenProfil}
-          aria-label="Ton profil"
-          style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
-        >
-          <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
-        </button>
+      <button
+        onClick={onOpenProfil}
+        aria-label="Ton profil"
+        style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
+      >
+        <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
+      </button>
 
-        <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
-          <MapRoundBtn onClick={() => setShowBanner((s) => !s)}><Bell size={17} color={C.lagon} /></MapRoundBtn>
-          <MapRoundBtn onClick={onOpenMessages} badge={messagesCount}><MessageCircle size={17} color={C.lagon} /></MapRoundBtn>
+      <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
+        <MapRoundBtn onClick={onOpenCalendrier}><Calendar size={17} color={C.lagon} /></MapRoundBtn>
+        <MapRoundBtn onClick={onOpenMessages} badge={messagesCount}><MessageCircle size={17} color={C.lagon} /></MapRoundBtn>
+      </div>
+
+      {showBanner && (
+        <div style={{
+          position: "absolute", top: 64, left: 14, right: 14, zIndex: 390,
+          background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 8,
+          fontFamily: "'Work Sans', sans-serif", fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+        }}>
+          <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+          <div style={{ flex: 1 }}>Version de test connectée en direct — comptes et sorties sont réels.</div>
+          <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
         </div>
+      )}
 
-        {showBanner && (
-          <div style={{
-            position: "absolute", top: 64, left: 14, right: 14, zIndex: 390,
-            background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 8,
-            fontFamily: "'Work Sans', sans-serif", fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+      <button
+        onClick={onCreateNew}
+        aria-label="Proposer une sortie"
+        style={{
+          position: "absolute", bottom: 88, left: "50%", transform: "translateX(-50%)", width: 54, height: 54, borderRadius: "50%",
+          background: C.corail, color: C.blanc, border: "none", display: "flex", alignItems: "center", justifyContent: "center",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 400,
+        }}
+      >
+        <Plus size={24} />
+      </button>
+
+      <div style={{ position: "absolute", bottom: 88, right: 14, zIndex: 400 }}>
+        <MapRoundBtn onClick={() => setShowFilters(true)} badge={activeFilters}><SlidersHorizontal size={17} color={C.lagon} /></MapRoundBtn>
+      </div>
+
+      {showFilters && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 500, background: "rgba(30,42,36,0.45)" }} onClick={() => setShowFilters(false)}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "72%", overflowY: "auto",
+            background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
           }}>
-            <Sparkles size={15} style={{ flexShrink: 0, marginTop: 1 }} />
-            <div style={{ flex: 1 }}>Version de test connectée en direct — comptes et sorties sont réels.</div>
-            <button onClick={() => setShowBanner(false)} style={{ background: "none", border: "none", cursor: "pointer", flexShrink: 0 }}><X size={14} color={C.blanc} /></button>
-          </div>
-        )}
-
-        <div style={{ position: "absolute", bottom: 14, left: 14, zIndex: 400 }}>
-          <MapRoundBtn onClick={() => setShowFilters(true)}><Search size={17} color={C.lagon} /></MapRoundBtn>
-        </div>
-
-        <button
-          onClick={onCreateNew}
-          aria-label="Proposer une sortie"
-          style={{
-            position: "absolute", bottom: 10, left: "50%", transform: "translateX(-50%)", width: 54, height: 54, borderRadius: "50%",
-            background: C.corail, color: C.blanc, border: "none", display: "flex", alignItems: "center", justifyContent: "center",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)", cursor: "pointer", zIndex: 400,
-          }}
-        >
-          <Plus size={24} />
-        </button>
-
-        <div style={{ position: "absolute", bottom: 14, right: 14, zIndex: 400 }}>
-          <MapRoundBtn onClick={() => setShowFilters(true)} badge={activeFilters}><SlidersHorizontal size={17} color={C.lagon} /></MapRoundBtn>
-        </div>
-
-        {showFilters && (
-          <div style={{ position: "absolute", inset: 0, zIndex: 500, background: "rgba(30,42,36,0.45)" }} onClick={() => setShowFilters(false)}>
-            <div onClick={(e) => e.stopPropagation()} style={{
-              position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "72%", overflowY: "auto",
-              background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
-            }}>
-              <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
-              <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Catégorie</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
-                <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
-                {CATEGORIES.map((c) => (
-                  <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
-                ))}
-              </div>
-              <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Commune</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-                <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
-                {COMMUNES.map((c) => (
-                  <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
-                ))}
-              </div>
-              <button onClick={() => setShowFilters(false)} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
-                Voir {activities.length} sortie{activities.length > 1 ? "s" : ""}
-              </button>
+            <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Catégorie</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+              <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
+              {CATEGORIES.map((c) => (
+                <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
+              ))}
             </div>
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Commune</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
+              <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
+              {COMMUNES.map((c) => (
+                <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
+              ))}
+            </div>
+            <button onClick={() => setShowFilters(false)} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
+              Voir {activities.length} sortie{activities.length > 1 ? "s" : ""}
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
-      <div style={{ flexShrink: 0, background: C.sable, borderTop: "1px solid " + C.sableDark, padding: "12px 14px" }}>
-        {activities.length === 0 ? (
-          <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
-        ) : (
-          <div className="scrollx" style={{ display: "flex", gap: 10 }}>
-            {activities.map((a) => (
-              <div key={a.id} style={{ width: 290, flexShrink: 0 }}>
-                <TicketCard activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />
-              </div>
-            ))}
+      {/* Poignée du fil, en bas — tap pour dérouler la liste complète */}
+      <button
+        onClick={() => setShowList(true)}
+        style={{
+          position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 410,
+          background: C.blanc, border: "none", borderTopLeftRadius: 20, borderTopRightRadius: 20,
+          padding: "10px 18px 16px", cursor: "pointer", boxShadow: "0 -4px 14px rgba(30,42,36,0.15)",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+        }}
+      >
+        <ChevronUp size={18} color="#9AA69E" />
+        <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, color: C.encre }}>
+          {activities.length} sortie{activities.length > 1 ? "s" : ""} · {communeLabel}
+        </div>
+      </button>
+
+      {showList && (
+        <div style={{ position: "absolute", inset: 0, zIndex: 520, background: C.sable, display: "flex", flexDirection: "column" }}>
+          <button
+            onClick={() => setShowList(false)}
+            style={{
+              flexShrink: 0, background: C.blanc, border: "none", borderBottom: "1px solid " + C.sableDark,
+              padding: "10px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+            }}
+          >
+            <ChevronDown size={18} color="#9AA69E" />
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13, color: C.encre }}>
+              {activities.length} sortie{activities.length > 1 ? "s" : ""} · {communeLabel}
+            </div>
+          </button>
+          <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px 90px" }}>
+            {activities.length === 0 ? (
+              <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
+            ) : (
+              activities.map((a) => (
+                <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />
+              ))
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1893,6 +1917,24 @@ function MessagesList({ conversations, onOpen }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function MonCalendrierTab({ activities, myId, joinedIds, onOpen }) {
+  const mine = activities
+    .filter((a) => a.organisateur_id === myId || joinedIds.includes(a.id))
+    .sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
+
+  return (
+    <div style={{ padding: "10px 18px 90px" }}>
+      {mine.length === 0 ? (
+        <EmptyState text="Tu n'as pas encore de sortie à venir. Organise-en une ou rejoins-en une depuis la carte !" />
+      ) : (
+        mine.map((a) => (
+          <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={false} onOpen={onOpen} />
+        ))
+      )}
     </div>
   );
 }
@@ -2526,25 +2568,6 @@ function modBtnStyle(color) {
     padding: "6px 10px", borderRadius: 8, border: "1.5px solid " + color, background: C.blanc,
     color, fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 11.5, cursor: "pointer",
   };
-}
-
-/* ---------------------------------- TAB BAR ---------------------------------- */
-
-function TabBtn({ icon: Icon, label, active, onClick, badge }) {
-  return (
-    <button onClick={onClick} style={{
-      flex: 1, background: "none", border: "none", cursor: "pointer", padding: "10px 4px 4px",
-      display: "flex", flexDirection: "column", alignItems: "center", gap: 3, position: "relative",
-    }}>
-      <Icon size={20} color={active ? C.lagon : "#9AA69E"} strokeWidth={active ? 2.4 : 2} />
-      <span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 10, fontWeight: active ? 700 : 500, color: active ? C.lagon : "#9AA69E" }}>{label}</span>
-      {!!badge && (
-        <div style={{ position: "absolute", top: 4, right: "28%", background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 9, fontWeight: 700, minWidth: 15, height: 15, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px" }}>
-          {badge}
-        </div>
-      )}
-    </button>
-  );
 }
 
 createRoot(document.getElementById("root")).render(<SotiMQ />);
