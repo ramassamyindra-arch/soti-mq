@@ -252,9 +252,11 @@ function ActivityMap({ activities, onOpen }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersLayer = useRef(null);
+  const userMarker = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
+    let watchId = null;
     import("leaflet").then((mod) => {
       const L = mod.default || mod;
       if (cancelled || !mapRef.current || mapInstance.current) return;
@@ -266,9 +268,36 @@ function ActivityMap({ activities, onOpen }) {
       }).addTo(map);
       markersLayer.current = L.layerGroup().addTo(map);
       mapInstance.current = map;
+
+      if (navigator.geolocation) {
+        const locationIcon = L.divIcon({
+          className: "",
+          html: `<div style="position:relative;width:20px;height:20px;">
+            <div style="position:absolute;inset:0;border-radius:50%;background:rgba(28,143,160,0.35);animation:locationPulse 2s infinite;"></div>
+            <div style="position:absolute;top:50%;left:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#1C8FA0;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
+          </div>`,
+          iconSize: [20, 20],
+          iconAnchor: [10, 10],
+        });
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (cancelled || !mapInstance.current) return;
+            const { latitude, longitude } = pos.coords;
+            if (!userMarker.current) {
+              userMarker.current = L.marker([latitude, longitude], { icon: locationIcon, zIndexOffset: 1000, interactive: false }).addTo(mapInstance.current);
+            } else {
+              userMarker.current.setLatLng([latitude, longitude]);
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 10000 }
+        );
+      }
     });
     return () => {
       cancelled = true;
+      if (watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
+      userMarker.current = null;
       if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
     };
   }, []);
@@ -1195,6 +1224,7 @@ function SotiMQ() {
         @keyframes growIn { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
         .sheet { animation: slideUp .3s cubic-bezier(.2,.8,.2,1); }
         @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        @keyframes locationPulse { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(3); opacity: 0; } }
         input:focus, textarea:focus, select:focus { outline: 2px solid ${C.lagonLight}; outline-offset: 1px; }
         button:focus-visible { outline: 2px solid ${C.lagonLight}; outline-offset: 2px; }
       `}</style>
