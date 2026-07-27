@@ -1596,6 +1596,45 @@ function FilTab({
       return 0;
     });
   }
+
+  const [handleDragY, setHandleDragY] = useState(0);
+  const handleDragRef = useRef({ startY: 0, dragging: false });
+  function handleHandleDragStart(e) {
+    handleDragRef.current = { startY: e.clientY, dragging: true };
+  }
+  function handleHandleDragMove(e) {
+    if (!handleDragRef.current.dragging) return;
+    const delta = e.clientY - handleDragRef.current.startY;
+    if (delta < 0) setHandleDragY(delta);
+  }
+  function handleHandleDragEnd() {
+    if (!handleDragRef.current.dragging) return;
+    handleDragRef.current.dragging = false;
+    setHandleDragY((d) => {
+      if (d < -40) setShowList(true);
+      return 0;
+    });
+  }
+
+  const [listDragY, setListDragY] = useState(0);
+  const listDragRef = useRef({ startY: 0, dragging: false });
+  function handleListDragStart(e) {
+    listDragRef.current = { startY: e.clientY, dragging: true };
+  }
+  function handleListDragMove(e) {
+    if (!listDragRef.current.dragging) return;
+    const delta = e.clientY - listDragRef.current.startY;
+    if (delta > 0) setListDragY(delta);
+  }
+  function handleListDragEnd() {
+    if (!listDragRef.current.dragging) return;
+    listDragRef.current.dragging = false;
+    setListDragY((d) => {
+      if (d > 70) setShowList(false);
+      return 0;
+    });
+  }
+
   const activeFilters =
     (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0) +
     (filterDate !== "any" ? 1 : 0) + (filterFormat !== "toutes" ? 1 : 0);
@@ -1735,14 +1774,20 @@ function FilTab({
         </div>
       )}
 
-      {/* Poignée du fil, en bas — tap pour dérouler la liste complète */}
+      {/* Poignée du fil, en bas — tap ou swipe vers le haut pour dérouler la liste complète */}
       <button
         onClick={() => setShowList(true)}
+        onPointerDown={handleHandleDragStart}
+        onPointerMove={handleHandleDragMove}
+        onPointerUp={handleHandleDragEnd}
+        onPointerCancel={handleHandleDragEnd}
         style={{
           position: "absolute", bottom: 0, left: 0, right: 0, zIndex: 410,
           background: C.blanc, border: "none", borderTopLeftRadius: 20, borderTopRightRadius: 20,
-          padding: "10px 18px 16px", cursor: "pointer", boxShadow: "0 -4px 14px rgba(30,42,36,0.15)",
-          display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+          padding: "10px 18px 16px", cursor: "grab", boxShadow: "0 -4px 14px rgba(30,42,36,0.15)",
+          display: "flex", flexDirection: "column", alignItems: "center", gap: 4, touchAction: "none",
+          transform: handleDragY ? `translateY(${handleDragY}px)` : undefined,
+          transition: handleDragY ? "none" : "transform 0.2s ease",
         }}
       >
         <ChevronUp size={18} color="#9AA69E" />
@@ -1752,12 +1797,21 @@ function FilTab({
       </button>
 
       {showList && (
-        <div style={{ position: "absolute", inset: 0, zIndex: 1500, background: C.sable, display: "flex", flexDirection: "column" }}>
+        <div style={{
+          position: "absolute", inset: 0, zIndex: 1500, background: C.sable, display: "flex", flexDirection: "column",
+          transform: listDragY ? `translateY(${listDragY}px)` : undefined,
+          transition: listDragY ? "none" : "transform 0.2s ease",
+        }}>
           <button
             onClick={() => setShowList(false)}
+            onPointerDown={handleListDragStart}
+            onPointerMove={handleListDragMove}
+            onPointerUp={handleListDragEnd}
+            onPointerCancel={handleListDragEnd}
             style={{
               flexShrink: 0, background: C.blanc, border: "none", borderBottom: "1px solid " + C.sableDark,
-              padding: "10px 18px 14px", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              padding: "10px 18px 14px", cursor: "grab", display: "flex", flexDirection: "column", alignItems: "center", gap: 4,
+              touchAction: "none",
             }}
           >
             <ChevronDown size={18} color="#9AA69E" />
