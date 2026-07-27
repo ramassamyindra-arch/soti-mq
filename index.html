@@ -195,10 +195,10 @@ function ActivityMap({ activities, onOpen }) {
     import("leaflet").then((mod) => {
       const L = mod.default || mod;
       if (cancelled || !mapRef.current || mapInstance.current) return;
-      const map = L.map(mapRef.current, { zoomControl: false }).setView([14.6415, -61.0242], 10);
-      L.control.zoom({ position: "bottomright" }).addTo(map);
+      const map = L.map(mapRef.current, { zoomControl: false, attributionControl: false }).setView([14.6415, -61.0242], 10);
+      L.control.attribution({ position: "bottomleft", prefix: false }).addTo(map);
       L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        attribution: "&copy; OpenStreetMap contributors",
+        attribution: "&copy; OpenStreetMap",
         maxZoom: 18,
       }).addTo(map);
       markersLayer.current = L.layerGroup().addTo(map);
