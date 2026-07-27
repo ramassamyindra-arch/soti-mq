@@ -2076,11 +2076,12 @@ function MessagesList({ conversations, onOpen }) {
 }
 
 const CALENDRIER_CATS = [
-  { id: "interesse", label: "Intéressé(e)", icon: Heart },
-  { id: "participe", label: "Je participe", icon: Users },
-  { id: "organise", label: "J'organise", icon: Home },
-  { id: "passees", label: "Passées", icon: Clock },
+  { id: "interesse", label: "Intéressé(e)", icon: Heart, color: C.corail },
+  { id: "participe", label: "Je participe", icon: Users, color: C.lagon },
+  { id: "organise", label: "J'organise", icon: Home, color: C.soleil },
+  { id: "passees", label: "Passées", icon: Clock, color: "#5B6960" },
 ];
+const calCatById = (id) => CALENDRIER_CATS.find((c) => c.id === id);
 
 const CALENDRIER_EMPTY_TEXT = {
   interesse: "Marque une sortie « Intéressé(e) » (petit cœur sur sa fiche) pour la retrouver ici.",
@@ -2144,9 +2145,9 @@ function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay }) {
               <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, fontWeight: isToday ? 700 : 500, color: C.encre }}>{day}</div>
               <div style={{ height: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
                 {shown.map((catId) => {
-                  const cat = catById(catId);
+                  const cat = calCatById(catId);
                   const Icon = cat.icon;
-                  return <Icon key={catId} size={8} color={cat.color} />;
+                  return <Icon key={catId} size={8} color={cat.color} fill={catId === "interesse" ? cat.color : "none"} />;
                 })}
                 {extra > 0 && (
                   <span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 7, fontWeight: 700, color: "#5B6960" }}>+{extra}</span>
@@ -2174,9 +2175,11 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
   };
 
   const dateCategories = new Map();
-  lists[calTab].forEach((a) => {
-    if (!dateCategories.has(a.date)) dateCategories.set(a.date, new Set());
-    dateCategories.get(a.date).add(a.categorie);
+  CALENDRIER_CATS.forEach((c) => {
+    lists[c.id].forEach((a) => {
+      if (!dateCategories.has(a.date)) dateCategories.set(a.date, new Set());
+      dateCategories.get(a.date).add(c.id);
+    });
   });
   const dayFiltered = selectedDay ? lists[calTab].filter((a) => a.date === selectedDay) : lists[calTab];
   const sorted = calTab === "passees"
