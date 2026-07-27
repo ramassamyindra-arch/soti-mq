@@ -1547,6 +1547,25 @@ function FilTab({
 }) {
   const [showFilters, setShowFilters] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [filterDragY, setFilterDragY] = useState(0);
+  const filterDragRef = useRef({ startY: 0, dragging: false });
+
+  function handleFilterDragStart(e) {
+    filterDragRef.current = { startY: e.clientY, dragging: true };
+  }
+  function handleFilterDragMove(e) {
+    if (!filterDragRef.current.dragging) return;
+    const delta = e.clientY - filterDragRef.current.startY;
+    if (delta > 0) setFilterDragY(delta);
+  }
+  function handleFilterDragEnd() {
+    if (!filterDragRef.current.dragging) return;
+    filterDragRef.current.dragging = false;
+    setFilterDragY((d) => {
+      if (d > 70) setShowFilters(false);
+      return 0;
+    });
+  }
   const activeFilters =
     (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0) +
     (filterDate !== "any" ? 1 : 0) + (filterFormat !== "toutes" ? 1 : 0);
@@ -1612,16 +1631,35 @@ function FilTab({
           <div onClick={(e) => e.stopPropagation()} style={{
             position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "72%", overflowY: "auto",
             background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
+            transform: filterDragY ? `translateY(${filterDragY}px)` : undefined,
+            transition: filterDragY ? "none" : "transform 0.2s ease",
           }}>
-            <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
+            <div
+              onPointerDown={handleFilterDragStart}
+              onPointerMove={handleFilterDragMove}
+              onPointerUp={handleFilterDragEnd}
+              onPointerCancel={handleFilterDragEnd}
+              style={{ touchAction: "none", cursor: "grab", margin: "-10px -18px 0", padding: "10px 18px 0" }}
+            >
+              <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
 
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 17, color: C.encre }}>Filtres</div>
-              {activeFilters > 0 && (
-                <button onClick={resetFilters} style={{ background: "none", border: "none", color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
-                  Réinitialiser
-                </button>
-              )}
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 17, color: C.encre }}>Filtres</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  {activeFilters > 0 && (
+                    <button onClick={resetFilters} style={{ background: "none", border: "none", color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
+                      Réinitialiser
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowFilters(false)}
+                    aria-label="Fermer"
+                    style={{ background: C.sable, border: "none", borderRadius: "50%", width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0 }}
+                  >
+                    <X size={15} color={C.encre} />
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Date</div>
