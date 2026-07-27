@@ -248,7 +248,23 @@ function jitterFor(id) {
   return [a, b];
 }
 
-function ActivityMap({ activities, onOpen }) {
+function activityCoords(a) {
+  const base = COMMUNE_COORDS[a.commune] || COMMUNE_COORDS["Fort-de-France"];
+  const [dLat, dLng] = jitterFor(a.id);
+  return [base[0] + dLat, base[1] + dLng];
+}
+
+function distanceKm(lat1, lng1, lat2, lng2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const sinLat = Math.sin(dLat / 2);
+  const sinLng = Math.sin(dLng / 2);
+  const a = sinLat * sinLat + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * sinLng * sinLng;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function ActivityMap({ activities, onOpen, userPos }) {
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersLayer = useRef(null);
@@ -256,7 +272,6 @@ function ActivityMap({ activities, onOpen }) {
 
   useEffect(() => {
     let cancelled = false;
-    let watchId = null;
     import("leaflet").then((mod) => {
       const L = mod.default || mod;
       if (cancelled || !mapRef.current || mapInstance.current) return;
@@ -268,8 +283,26 @@ function ActivityMap({ activities, onOpen }) {
       }).addTo(map);
       markersLayer.current = L.layerGroup().addTo(map);
       mapInstance.current = map;
+    });
+    return () => {
+      cancelled = true;
+      userMarker.current = null;
+      if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
+    };
+  }, []);
 
-      if (navigator.geolocation) {
+  useEffect(() => {
+    window.__openActivityFromMap = onOpen;
+  }, [onOpen]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!userPos) return;
+    import("leaflet").then((mod) => {
+      const L = mod.default || mod;
+      if (cancelled || !mapInstance.current) return;
+      const [latitude, longitude] = userPos;
+      if (!userMarker.current) {
         const locationIcon = L.divIcon({
           className: "",
           html: `<div style="position:relative;width:20px;height:20px;">
@@ -279,32 +312,13 @@ function ActivityMap({ activities, onOpen }) {
           iconSize: [20, 20],
           iconAnchor: [10, 10],
         });
-        watchId = navigator.geolocation.watchPosition(
-          (pos) => {
-            if (cancelled || !mapInstance.current) return;
-            const { latitude, longitude } = pos.coords;
-            if (!userMarker.current) {
-              userMarker.current = L.marker([latitude, longitude], { icon: locationIcon, zIndexOffset: 1000, interactive: false }).addTo(mapInstance.current);
-            } else {
-              userMarker.current.setLatLng([latitude, longitude]);
-            }
-          },
-          () => {},
-          { enableHighAccuracy: true, maximumAge: 10000 }
-        );
+        userMarker.current = L.marker([latitude, longitude], { icon: locationIcon, zIndexOffset: 1000, interactive: false }).addTo(mapInstance.current);
+      } else {
+        userMarker.current.setLatLng([latitude, longitude]);
       }
     });
-    return () => {
-      cancelled = true;
-      if (watchId !== null && navigator.geolocation) navigator.geolocation.clearWatch(watchId);
-      userMarker.current = null;
-      if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; }
-    };
-  }, []);
-
-  useEffect(() => {
-    window.__openActivityFromMap = onOpen;
-  }, [onOpen]);
+    return () => { cancelled = true; };
+  }, [userPos]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1577,8 +1591,20 @@ function FilTab({
 }) {
   const [showFilters, setShowFilters] = useState(false);
   const [showList, setShowList] = useState(false);
+  const [listSort, setListSort] = useState("toutes");
+  const [userPos, setUserPos] = useState(null);
   const [filterDragY, setFilterDragY] = useState(0);
   const filterDragRef = useRef({ startY: 0, dragging: false });
+
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setUserPos([pos.coords.latitude, pos.coords.longitude]),
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 10000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   function handleFilterDragStart(e) {
     filterDragRef.current = { startY: e.clientY, dragging: true };
@@ -1650,7 +1676,7 @@ function FilTab({
 
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
-      <ActivityMap activities={activities} onOpen={onOpen} />
+      <ActivityMap activities={activities} onOpen={onOpen} userPos={userPos} />
 
       <button
         onClick={onOpenProfil}
@@ -1821,13 +1847,39 @@ function FilTab({
               Activités autour de {profile.commune}
             </div>
           </button>
+
+          <div style={{ flexShrink: 0, display: "flex", alignItems: "center", gap: 8, padding: "12px 18px", borderBottom: "1px solid " + C.sableDark }}>
+            <div style={{ display: "flex", gap: 8, flex: 1, overflowX: "auto" }} className="scrollx">
+              {[
+                { id: "toutes", label: "Toutes" },
+                { id: "nouveautes", label: "Nouveautés" },
+                { id: "proches", label: "Les plus proches" },
+              ].map((s) => (
+                <Chip key={s.id} active={listSort === s.id} colorActive={C.lagon} onClick={() => setListSort(s.id)}>{s.label}</Chip>
+              ))}
+            </div>
+            <MapRoundBtn onClick={() => setShowFilters(true)} badge={activeFilters}><SlidersHorizontal size={17} color={C.lagon} /></MapRoundBtn>
+          </div>
+
           <div style={{ flex: 1, overflowY: "auto", padding: "14px 18px 90px" }}>
             {activities.length === 0 ? (
               <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
             ) : (
-              activities.map((a) => (
-                <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />
-              ))
+              (() => {
+                let sortedList = activities;
+                if (listSort === "nouveautes") {
+                  sortedList = [...activities].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+                } else if (listSort === "proches" && userPos) {
+                  sortedList = [...activities].sort((a, b) => {
+                    const [aLat, aLng] = activityCoords(a);
+                    const [bLat, bLng] = activityCoords(b);
+                    return distanceKm(userPos[0], userPos[1], aLat, aLng) - distanceKm(userPos[0], userPos[1], bLat, bLng);
+                  });
+                }
+                return sortedList.map((a) => (
+                  <TicketCard key={a.id} activity={a} joined={joinedIds.includes(a.id)} waitlisted={waitlistIds.includes(a.id)} onOpen={onOpen} />
+                ));
+              })()
             )}
           </div>
         </div>
