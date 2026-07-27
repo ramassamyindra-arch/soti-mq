@@ -2091,7 +2091,7 @@ const CALENDRIER_EMPTY_TEXT = {
 
 function pad2(n) { return String(n).padStart(2, "0"); }
 
-function MonthCalendarGrid({ datesWithItems, icon: CatIcon, iconColor, filled, selectedDay, onSelectDay }) {
+function MonthCalendarGrid({ dateCategories, selectedDay, onSelectDay }) {
   const [viewDate, setViewDate] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -2125,9 +2125,12 @@ function MonthCalendarGrid({ datesWithItems, icon: CatIcon, iconColor, filled, s
         {cells.map((day, idx) => {
           if (day === null) return <div key={idx} />;
           const dateStr = `${year}-${pad2(month + 1)}-${pad2(day)}`;
-          const hasItem = datesWithItems.has(dateStr);
+          const catIds = dateCategories.get(dateStr);
+          const hasItem = !!catIds && catIds.size > 0;
           const isToday = dateStr === TODAY;
           const isSelected = dateStr === selectedDay;
+          const shown = hasItem ? Array.from(catIds).slice(0, 3) : [];
+          const extra = hasItem ? catIds.size - shown.length : 0;
           return (
             <button
               key={idx}
@@ -2139,8 +2142,15 @@ function MonthCalendarGrid({ datesWithItems, icon: CatIcon, iconColor, filled, s
               }}
             >
               <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, fontWeight: isToday ? 700 : 500, color: C.encre }}>{day}</div>
-              <div style={{ height: 10, display: "flex", alignItems: "center" }}>
-                {hasItem && <CatIcon size={9} color={iconColor} fill={filled ? iconColor : "none"} />}
+              <div style={{ height: 10, display: "flex", alignItems: "center", justifyContent: "center", gap: 1.5 }}>
+                {shown.map((catId) => {
+                  const cat = catById(catId);
+                  const Icon = cat.icon;
+                  return <Icon key={catId} size={8} color={cat.color} />;
+                })}
+                {extra > 0 && (
+                  <span style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 7, fontWeight: 700, color: "#5B6960" }}>+{extra}</span>
+                )}
               </div>
             </button>
           );
@@ -2163,8 +2173,11 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
     ),
   };
 
-  const currentCat = CALENDRIER_CATS.find((c) => c.id === calTab);
-  const datesWithItems = new Set(lists[calTab].map((a) => a.date));
+  const dateCategories = new Map();
+  lists[calTab].forEach((a) => {
+    if (!dateCategories.has(a.date)) dateCategories.set(a.date, new Set());
+    dateCategories.get(a.date).add(a.categorie);
+  });
   const dayFiltered = selectedDay ? lists[calTab].filter((a) => a.date === selectedDay) : lists[calTab];
   const sorted = calTab === "passees"
     ? [...dayFiltered].sort((a, b) => (b.date + b.heure).localeCompare(a.date + a.heure))
@@ -2195,10 +2208,7 @@ function MonCalendrierTab({ activities, myId, joinedIds, interestIds, onOpen }) 
       </div>
 
       <MonthCalendarGrid
-        datesWithItems={datesWithItems}
-        icon={currentCat.icon}
-        iconColor={C.corail}
-        filled={calTab === "interesse"}
+        dateCategories={dateCategories}
         selectedDay={selectedDay}
         onSelectDay={setSelectedDay}
       />
