@@ -1497,6 +1497,15 @@ function FilTab({
     (filterDate !== "any" ? 1 : 0) + (filterFormat !== "toutes" ? 1 : 0);
   const communeLabel = filterCommune === "Toutes" ? "Toute la Martinique" : filterCommune;
 
+  function resetFilters() {
+    setFilterCat("Toutes");
+    setFilterCommune("Toutes");
+    setFilterDate("any");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterFormat("toutes");
+  }
+
   return (
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
       <ActivityMap activities={activities} onOpen={onOpen} />
@@ -1550,6 +1559,15 @@ function FilTab({
             background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
           }}>
             <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
+
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+              <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 17, color: C.encre }}>Filtres</div>
+              {activeFilters > 0 && (
+                <button onClick={resetFilters} style={{ background: "none", border: "none", color: C.corail, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, cursor: "pointer", padding: 0 }}>
+                  Réinitialiser
+                </button>
+              )}
+            </div>
 
             <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Date</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: filterDate === "custom" ? 10 : 18 }}>
