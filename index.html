@@ -1866,7 +1866,7 @@ function FilTab({
               <EmptyState text="Aucune sortie ne correspond à ces filtres pour le moment. Sois le/la premier(ère) à en proposer une !" />
             ) : (
               (() => {
-                let sortedList = activities;
+                let sortedList = [...activities].sort((a, b) => (a.date + a.heure).localeCompare(b.date + b.heure));
                 if (listSort === "nouveautes") {
                   sortedList = [...activities].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
                 } else if (listSort === "proches" && userPos) {
