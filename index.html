@@ -62,7 +62,14 @@ const C = {
   blanc: "#FFFDF8",
 };
 
-const TODAY = new Date().toISOString().slice(0, 10);
+function isoDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+const TODAY = isoDate(new Date());
 
 const DATE_FILTERS = [
   { id: "any", label: "N'importe quand" },
@@ -73,8 +80,6 @@ const DATE_FILTERS = [
   { id: "nextweek", label: "La semaine prochaine" },
   { id: "custom", label: "Choisir les dates..." },
 ];
-
-function isoDate(d) { return d.toISOString().slice(0, 10); }
 
 function startOfWeek(d) {
   const day = d.getDay();
