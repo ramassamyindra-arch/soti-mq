@@ -64,6 +64,64 @@ const C = {
 
 const TODAY = new Date().toISOString().slice(0, 10);
 
+const DATE_FILTERS = [
+  { id: "any", label: "N'importe quand" },
+  { id: "today", label: "Aujourd'hui" },
+  { id: "tomorrow", label: "Demain" },
+  { id: "weekend", label: "Ce week-end" },
+  { id: "week", label: "Cette semaine" },
+  { id: "nextweek", label: "La semaine prochaine" },
+  { id: "custom", label: "Choisir les dates..." },
+];
+
+function isoDate(d) { return d.toISOString().slice(0, 10); }
+
+function startOfWeek(d) {
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function getDateRange(filterDate, customFrom, customTo) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  switch (filterDate) {
+    case "today":
+      return [isoDate(today), isoDate(today)];
+    case "tomorrow": {
+      const t = new Date(today); t.setDate(t.getDate() + 1);
+      return [isoDate(t), isoDate(t)];
+    }
+    case "weekend": {
+      const day = today.getDay();
+      if (day === 0) return [isoDate(today), isoDate(today)];
+      const sat = new Date(today); sat.setDate(today.getDate() + ((6 - day + 7) % 7));
+      const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
+      return [isoDate(sat), isoDate(sun)];
+    }
+    case "week": {
+      const monday = startOfWeek(today);
+      const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+      const start = today > monday ? today : monday;
+      return [isoDate(start), isoDate(sunday)];
+    }
+    case "nextweek": {
+      const monday = startOfWeek(today);
+      const nextMonday = new Date(monday); nextMonday.setDate(monday.getDate() + 7);
+      const nextSunday = new Date(nextMonday); nextSunday.setDate(nextMonday.getDate() + 6);
+      return [isoDate(nextMonday), isoDate(nextSunday)];
+    }
+    case "custom":
+      if (!customFrom) return null;
+      return [customFrom, customTo || customFrom];
+    default:
+      return null;
+  }
+}
+
 const LINK_RE = /(https?:\/\/|www\.[a-z0-9-]+\.[a-z]{2,})/i;
 const CARD_RE = /([0-9][ -]?){13,19}/;
 const IBAN_RE = /\b[a-z]{2}[0-9]{2}[a-z0-9]{10,30}\b/i;
@@ -658,6 +716,10 @@ function SotiMQ() {
   const [tab, setTab] = useState("fil");
   const [filterCat, setFilterCat] = useState("Toutes");
   const [filterCommune, setFilterCommune] = useState("Toutes");
+  const [filterDate, setFilterDate] = useState("any");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterFormat, setFilterFormat] = useState("toutes");
   const [detailId, setDetailId] = useState(null);
   const [chatId, setChatId] = useState(null);
   const [showBanner, setShowBanner] = useState(true);
@@ -1055,9 +1117,12 @@ function SotiMQ() {
 
   const formValid = form.titre && (form.lieu || form.en_ligne) && form.date && form.heure && !!profile.avatar_url;
 
+  const filterDateRange = getDateRange(filterDate, filterDateFrom, filterDateTo);
   const filteredActivities = activities.filter((a) =>
     (filterCat === "Toutes" || a.categorie === filterCat) &&
-    (filterCommune === "Toutes" || a.commune === filterCommune)
+    (filterCommune === "Toutes" || a.commune === filterCommune) &&
+    (filterFormat === "toutes" || (filterFormat === "visio" ? a.en_ligne : !a.en_ligne)) &&
+    (!filterDateRange || (a.date >= filterDateRange[0] && a.date <= filterDateRange[1]))
   );
 
   const myConversations = activities.filter((a) => joinedIds.includes(a.id));
@@ -1176,6 +1241,10 @@ function SotiMQ() {
                   activities={filteredActivities} joinedIds={joinedIds} waitlistIds={waitlistIds} onOpen={setDetailId}
                   filterCat={filterCat} setFilterCat={setFilterCat}
                   filterCommune={filterCommune} setFilterCommune={setFilterCommune}
+                  filterDate={filterDate} setFilterDate={setFilterDate}
+                  filterDateFrom={filterDateFrom} setFilterDateFrom={setFilterDateFrom}
+                  filterDateTo={filterDateTo} setFilterDateTo={setFilterDateTo}
+                  filterFormat={filterFormat} setFilterFormat={setFilterFormat}
                   showBanner={showBanner} setShowBanner={setShowBanner}
                   onCreateNew={() => setTab("creer")}
                   profile={profile}
@@ -1409,10 +1478,18 @@ function MapRoundBtn({ onClick, children, badge }) {
   );
 }
 
-function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilterCat, filterCommune, setFilterCommune, showBanner, setShowBanner, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, messagesCount }) {
+function FilTab({
+  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, messagesCount,
+  showBanner, setShowBanner,
+  filterCat, setFilterCat, filterCommune, setFilterCommune,
+  filterDate, setFilterDate, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo,
+  filterFormat, setFilterFormat,
+}) {
   const [showFilters, setShowFilters] = useState(false);
   const [showList, setShowList] = useState(false);
-  const activeFilters = (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0);
+  const activeFilters =
+    (filterCat !== "Toutes" ? 1 : 0) + (filterCommune !== "Toutes" ? 1 : 0) +
+    (filterDate !== "any" ? 1 : 0) + (filterFormat !== "toutes" ? 1 : 0);
   const communeLabel = filterCommune === "Toutes" ? "Toute la Martinique" : filterCommune;
 
   return (
@@ -1428,13 +1505,14 @@ function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilt
       </button>
 
       <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
+        <MapRoundBtn onClick={() => setShowBanner((s) => !s)}><Bell size={17} color={C.lagon} /></MapRoundBtn>
         <MapRoundBtn onClick={onOpenCalendrier}><Calendar size={17} color={C.lagon} /></MapRoundBtn>
         <MapRoundBtn onClick={onOpenMessages} badge={messagesCount}><MessageCircle size={17} color={C.lagon} /></MapRoundBtn>
       </div>
 
       {showBanner && (
         <div style={{
-          position: "absolute", top: 64, left: 14, right: 14, zIndex: 390,
+          position: "absolute", top: 160, left: 14, right: 14, zIndex: 390,
           background: C.mangrove, color: C.blanc, borderRadius: 14, padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: 8,
           fontFamily: "'Work Sans', sans-serif", fontSize: 12, boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
         }}>
@@ -1467,20 +1545,43 @@ function FilTab({ activities, joinedIds, waitlistIds, onOpen, filterCat, setFilt
             background: C.blanc, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: "10px 18px 20px",
           }}>
             <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 16px" }} />
-            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Catégorie</div>
+
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Date</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: filterDate === "custom" ? 10 : 18 }}>
+              {DATE_FILTERS.map((d) => (
+                <Chip key={d.id} active={filterDate === d.id} colorActive={C.lagon} onClick={() => setFilterDate(d.id)}>{d.label}</Chip>
+              ))}
+            </div>
+            {filterDate === "custom" && (
+              <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+                <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} style={{ ...inputStyle, flex: 1, fontSize: 13, padding: "9px 10px" }} />
+                <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} style={{ ...inputStyle, flex: 1, fontSize: 13, padding: "9px 10px" }} />
+              </div>
+            )}
+
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Commune</div>
+            <select value={filterCommune} onChange={(e) => setFilterCommune(e.target.value)} style={{ ...inputStyle, marginBottom: 18 }}>
+              <option value="Toutes">Toute la Martinique</option>
+              {COMMUNES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Format</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 18 }}>
+              <Chip active={filterFormat === "toutes"} colorActive={C.lagon} onClick={() => setFilterFormat("toutes")}>Toutes</Chip>
+              <Chip active={filterFormat === "presentiel"} colorActive={C.lagon} onClick={() => setFilterFormat("presentiel")}>En personne</Chip>
+              <Chip active={filterFormat === "visio"} colorActive={C.lagon} onClick={() => setFilterFormat("visio")}>En visio</Chip>
+            </div>
+
+            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Centres d'intérêt</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
               <Chip active={filterCat === "Toutes"} onClick={() => setFilterCat("Toutes")}>Toutes</Chip>
               {CATEGORIES.map((c) => (
                 <Chip key={c.id} active={filterCat === c.id} colorActive={c.color} onClick={() => setFilterCat(c.id)}>{c.label}</Chip>
               ))}
             </div>
-            <div style={{ fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960", textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 8 }}>Commune</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 20 }}>
-              <Chip active={filterCommune === "Toutes"} colorActive={C.lagon} onClick={() => setFilterCommune("Toutes")}>Toute la Martinique</Chip>
-              {COMMUNES.map((c) => (
-                <Chip key={c} active={filterCommune === c} colorActive={C.lagon} onClick={() => setFilterCommune(c)}>{c}</Chip>
-              ))}
-            </div>
+
             <button onClick={() => setShowFilters(false)} style={{ width: "100%", padding: "13px", borderRadius: 14, border: "none", background: C.lagon, color: C.blanc, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, cursor: "pointer" }}>
               Voir {activities.length} sortie{activities.length > 1 ? "s" : ""}
             </button>
