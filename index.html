@@ -760,6 +760,7 @@ function SotiMQ() {
   const [participations, setParticipations] = useState([]);
   const [interets, setInterets] = useState([]);
   const [profilesById, setProfilesById] = useState({});
+  const [friendships, setFriendships] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
 
   const [tab, setTab] = useState("fil");
@@ -932,11 +933,12 @@ function SotiMQ() {
 
   /* ---------- data: activities + participations + profiles ---------- */
   async function refreshCommunity() {
-    const [{ data: acts }, { data: parts }, { data: prof_interets }, { data: profs }] = await Promise.all([
+    const [{ data: acts }, { data: parts }, { data: prof_interets }, { data: profs }, { data: amis }] = await Promise.all([
       supabase.from("activities").select("*").order("date", { ascending: true }),
       supabase.from("participations").select("*"),
       supabase.from("interets").select("*"),
       supabase.from("profiles").select("id, prenom, commune, interests, avatar_url, created_at"),
+      supabase.from("friendships").select("*"),
     ]);
     setActivitiesRaw(acts || []);
     setParticipations(parts || []);
@@ -944,6 +946,7 @@ function SotiMQ() {
     const map = {};
     (profs || []).forEach((p) => { map[p.id] = p; });
     setProfilesById(map);
+    setFriendships(amis || []);
   }
 
   useEffect(() => {
@@ -954,9 +957,24 @@ function SotiMQ() {
       .on("postgres_changes", { event: "*", schema: "public", table: "activities" }, refreshCommunity)
       .on("postgres_changes", { event: "*", schema: "public", table: "participations" }, refreshCommunity)
       .on("postgres_changes", { event: "*", schema: "public", table: "interets" }, refreshCommunity)
+      .on("postgres_changes", { event: "*", schema: "public", table: "friendships" }, refreshCommunity)
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [session, profile]);
+
+  async function sendFriendRequest(otherId) {
+    const tempId = "temp-" + otherId;
+    setFriendships((prev) => [...prev, { id: tempId, requester_id: session.user.id, addressee_id: otherId, status: "pending" }]);
+    await supabase.from("friendships").insert({ requester_id: session.user.id, addressee_id: otherId });
+  }
+  async function acceptFriendRequest(friendshipId) {
+    setFriendships((prev) => prev.map((f) => (f.id === friendshipId ? { ...f, status: "accepted" } : f)));
+    await supabase.from("friendships").update({ status: "accepted" }).eq("id", friendshipId);
+  }
+  async function removeFriendship(friendshipId) {
+    setFriendships((prev) => prev.filter((f) => f.id !== friendshipId));
+    await supabase.from("friendships").delete().eq("id", friendshipId);
+  }
 
   async function toggleInteret(activityId) {
     const existing = interets.find((i) => i.activity_id === activityId);
@@ -1216,6 +1234,10 @@ function SotiMQ() {
 
   const myConversations = activities.filter((a) => joinedIds.includes(a.id));
   const organisedCount = profile ? activities.filter((a) => a.organisateur_id === profile.id).length : 0;
+  const activityTotal = organisedCount + joinedIds.length;
+  const receivedRequests = session ? friendships.filter((f) => f.status === "pending" && f.addressee_id === session.user.id) : [];
+  const sentRequests = session ? friendships.filter((f) => f.status === "pending" && f.requester_id === session.user.id) : [];
+  const acceptedFriendships = session ? friendships.filter((f) => f.status === "accepted") : [];
   const chatDisplayMessages = chatMessages.map((m) => ({
     author: m.author_id === session?.user?.id ? "me" : "other",
     name: prenomOf(m.author_id),
@@ -1294,6 +1316,7 @@ function SotiMQ() {
                     {tab === "contact" && "Nous contacter"}
                     {tab === "moderation" && "Modération"}
                     {tab === "calendrier" && "Mon agenda"}
+                    {tab === "amis" && "Mes amis"}
                   </div>
                   <button
                     onClick={closeScreen}
@@ -1353,7 +1376,22 @@ function SotiMQ() {
                   onOpenProfil={() => setTab("profil")}
                   onOpenMessages={() => setTab("messages")}
                   onOpenCalendrier={() => setTab("calendrier")}
+                  onOpenAmis={() => setTab("amis")}
                   messagesCount={myConversations.length}
+                  activityTotal={activityTotal}
+                  receivedRequestsCount={receivedRequests.length}
+                />
+              )}
+              {tab === "amis" && (
+                <AmisTab
+                  myId={profile.id}
+                  profilesById={profilesById}
+                  receivedRequests={receivedRequests}
+                  sentRequests={sentRequests}
+                  acceptedFriendships={acceptedFriendships}
+                  onSendRequest={sendFriendRequest}
+                  onAccept={acceptFriendRequest}
+                  onRemove={removeFriendship}
                 />
               )}
               {tab === "creer" && (
@@ -1583,12 +1621,14 @@ function MapRoundBtn({ onClick, children, badge }) {
 }
 
 function FilTab({
-  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, messagesCount,
+  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, onOpenAmis, messagesCount,
+  activityTotal, receivedRequestsCount,
   showBanner, setShowBanner,
   filterCat, setFilterCat, filterCommune, setFilterCommune,
   filterDate, setFilterDate, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo,
   filterFormat, setFilterFormat,
 }) {
+  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showList, setShowList] = useState(false);
   const [listSort, setListSort] = useState("toutes");
@@ -1678,13 +1718,63 @@ function FilTab({
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
       <ActivityMap activities={activities} onOpen={onOpen} userPos={userPos} />
 
-      <button
-        onClick={onOpenProfil}
-        aria-label="Ton profil"
-        style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
-      >
-        <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
-      </button>
+      <div style={{ position: "absolute", top: 14, left: 14, zIndex: 400 }}>
+        <button
+          onClick={() => setShowAvatarMenu((s) => !s)}
+          aria-label="Menu profil"
+          style={{ border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)", display: "block" }}
+        >
+          <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
+        </button>
+
+        {showAvatarMenu && (
+          <React.Fragment>
+            <div style={{ position: "fixed", inset: 0, zIndex: 399 }} onClick={() => setShowAvatarMenu(false)} />
+            <div style={{
+              position: "absolute", top: 48, left: 0, zIndex: 401, background: C.blanc, borderRadius: 16,
+              boxShadow: "0 8px 24px rgba(30,42,36,0.25)", padding: "14px 16px", minWidth: 200,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: getActivityBadge(activityTotal) ? 8 : 4 }}>
+                <Avatar name={profile.prenom} src={profile.avatar_url} size={36} />
+                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15, color: C.encre }}>{profile.prenom}</div>
+              </div>
+              {getActivityBadge(activityTotal) && (
+                <div style={{ marginBottom: 10 }}><ActivityBadge total={activityTotal} /></div>
+              )}
+              <div style={{ height: 1, background: C.sableDark, margin: "8px 0 4px" }} />
+              <button
+                onClick={() => { setShowAvatarMenu(false); onOpenProfil(); }}
+                style={{
+                  width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 0", cursor: "pointer",
+                  fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, color: C.encre,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}
+              >
+                Mon profil <ChevronRight size={15} color="#9AA69E" />
+              </button>
+              <button
+                onClick={() => { setShowAvatarMenu(false); onOpenAmis(); }}
+                style={{
+                  width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 0", cursor: "pointer",
+                  fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, color: C.encre,
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                }}
+              >
+                Mes amis
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {receivedRequestsCount > 0 && (
+                    <span style={{
+                      background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 10, fontWeight: 700,
+                      minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px",
+                    }}>{receivedRequestsCount}</span>
+                  )}
+                  <ChevronRight size={15} color="#9AA69E" />
+                </div>
+              </button>
+            </div>
+          </React.Fragment>
+        )}
+      </div>
 
       <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
         <MapRoundBtn onClick={() => setShowBanner((s) => !s)}><Bell size={17} color={C.lagon} /></MapRoundBtn>
@@ -2283,6 +2373,96 @@ function MessagesList({ conversations, onOpen }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AmisTab({ myId, profilesById, receivedRequests, sentRequests, acceptedFriendships, onSendRequest, onAccept, onRemove }) {
+  const otherIdOf = (f) => (f.requester_id === myId ? f.addressee_id : f.requester_id);
+  const involvedIds = new Set([
+    ...receivedRequests.map(otherIdOf),
+    ...sentRequests.map(otherIdOf),
+    ...acceptedFriendships.map(otherIdOf),
+  ]);
+  const discoverable = Object.values(profilesById).filter((p) => p.id !== myId && !involvedIds.has(p.id));
+
+  const sectionTitleStyle = {
+    fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12.5, color: "#5B6960",
+    textTransform: "uppercase", letterSpacing: 0.4, marginBottom: 10,
+  };
+  const pillBtnStyle = (bg, color) => ({
+    background: bg, color, border: "none", borderRadius: 999, padding: "7px 13px",
+    fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap", flexShrink: 0,
+  });
+
+  function PersonRow({ person, children }) {
+    if (!person) return null;
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "9px 0" }}>
+        <Avatar name={person.prenom} src={person.avatar_url} size={42} />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 600, fontSize: 14.5, color: C.encre }}>{person.prenom}</div>
+          {person.commune && <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 11.5, color: "#5B6960" }}>{person.commune}</div>}
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ padding: "10px 18px 90px" }}>
+      {receivedRequests.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <div style={sectionTitleStyle}>Demandes reçues</div>
+          {receivedRequests.map((f) => (
+            <PersonRow key={f.id} person={profilesById[otherIdOf(f)]}>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => onAccept(f.id)} style={pillBtnStyle(C.lagon, C.blanc)}>Accepter</button>
+                <button onClick={() => onRemove(f.id)} style={pillBtnStyle(C.sable, C.encre)}>Refuser</button>
+              </div>
+            </PersonRow>
+          ))}
+        </div>
+      )}
+
+      <div style={{ marginBottom: 22 }}>
+        <div style={sectionTitleStyle}>Mes amis ({acceptedFriendships.length})</div>
+        {acceptedFriendships.length === 0 ? (
+          <EmptyState text="Tu n'as pas encore d'ami(e) sur Sòti MQ. Ajoute des membres ci-dessous !" />
+        ) : (
+          acceptedFriendships.map((f) => (
+            <PersonRow key={f.id} person={profilesById[otherIdOf(f)]}>
+              <button onClick={() => onRemove(f.id)} aria-label="Retirer" style={{ background: "none", border: "none", cursor: "pointer", padding: 6, flexShrink: 0 }}>
+                <X size={16} color="#9AA69E" />
+              </button>
+            </PersonRow>
+          ))
+        )}
+      </div>
+
+      {sentRequests.length > 0 && (
+        <div style={{ marginBottom: 22 }}>
+          <div style={sectionTitleStyle}>Demandes envoyées</div>
+          {sentRequests.map((f) => (
+            <PersonRow key={f.id} person={profilesById[otherIdOf(f)]}>
+              <button onClick={() => onRemove(f.id)} style={pillBtnStyle(C.sable, C.encre)}>Annuler</button>
+            </PersonRow>
+          ))}
+        </div>
+      )}
+
+      <div>
+        <div style={sectionTitleStyle}>Découvrir des membres</div>
+        {discoverable.length === 0 ? (
+          <EmptyState text="Personne d'autre à découvrir pour l'instant." />
+        ) : (
+          discoverable.map((p) => (
+            <PersonRow key={p.id} person={p}>
+              <button onClick={() => onSendRequest(p.id)} style={pillBtnStyle(C.lagon, C.blanc)}>Ajouter</button>
+            </PersonRow>
+          ))
+        )}
+      </div>
     </div>
   );
 }
