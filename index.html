@@ -39,7 +39,7 @@ import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, ChevronRight, Bell, MessageCircle,
   Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
-  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home
+  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home, Hand
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -138,22 +138,22 @@ function detectSensitiveContent(text) {
 }
 
 function getActivityBadge(total) {
-  if (total >= 30) return { label: "Pilier", color: C.soleil };
-  if (total >= 15) return { label: "Habitué", color: C.lagonLight };
-  if (total >= 5) return { label: "Actif", color: C.mangrove };
-  return null;
+  if (total >= 30) return { label: "Pilier", color: C.soleil, icon: Sparkles };
+  if (total >= 15) return { label: "Habitué", color: C.lagonLight, icon: Sparkles };
+  if (total >= 5) return { label: "Actif", color: C.mangrove, icon: Sparkles };
+  return { label: "Nouveau", color: C.corail, icon: Hand };
 }
 
 function ActivityBadge({ total }) {
   const badge = getActivityBadge(total);
-  if (!badge) return null;
+  const Icon = badge.icon;
   return (
     <span style={{
       display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 999,
       background: badge.color + "1A", color: badge.color, border: "1px solid " + badge.color,
       fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 10.5, whiteSpace: "nowrap",
     }}>
-      <Sparkles size={10} /> {badge.label}
+      <Icon size={10} /> {badge.label}
     </span>
   );
 }
@@ -1318,19 +1318,21 @@ function SotiMQ() {
                   <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 21, color: C.blanc, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {tab === "creer" && "Créer une sortie"}
                     {tab === "messages" && "Mes messages"}
-                    {tab === "profil" && (
-                      <React.Fragment>
-                        {profile.prenom}{profile.age ? `, ${profile.age}` : ""}
-                        {getActivityBadge(activityTotal) && (
+                    {tab === "profil" && (() => {
+                      const badge = getActivityBadge(activityTotal);
+                      const BadgeIcon = badge.icon;
+                      return (
+                        <React.Fragment>
+                          {profile.prenom}{profile.age ? `, ${profile.age}` : ""}
                           <span style={{
                             display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 999,
                             background: "rgba(255,255,255,0.18)", color: C.blanc, fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif",
                           }}>
-                            <Sparkles size={10} /> {getActivityBadge(activityTotal).label}
+                            <BadgeIcon size={10} /> {badge.label}
                           </span>
-                        )}
-                      </React.Fragment>
-                    )}
+                        </React.Fragment>
+                      );
+                    })()}
                     {tab === "contact" && "Nous contacter"}
                     {tab === "moderation" && "Modération"}
                     {tab === "calendrier" && "Mon agenda"}
