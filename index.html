@@ -482,6 +482,11 @@ function TicketCard({ activity, joined, waitlisted, onOpen }) {
           <div style={{ fontFamily: "'Fraunces', serif", fontSize: 16.5, fontWeight: 600, color: C.encre, lineHeight: 1.2 }}>
             {activity.titre}
           </div>
+          {activity.visibilite === "amis" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 3, background: C.prune + "1E", color: C.prune, borderRadius: 999, padding: "2px 8px", fontSize: 10, fontWeight: 700, fontFamily: "'Work Sans', sans-serif", flexShrink: 0 }}>
+              <Users size={10} /> AMIS
+            </div>
+          )}
           {joined && (
             <div style={{ background: C.mangrove, color: C.blanc, borderRadius: 999, padding: "2px 8px", fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif", flexShrink: 0 }}>
               INSCRIT
@@ -809,7 +814,7 @@ function SotiMQ() {
 
   const [form, setForm] = useState({
     titre: "", categorie: "plage", commune: COMMUNES[0], lieu: "",
-    date: "", heure: "", places: 6, description: "", en_ligne: false,
+    date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public",
   });
 
   const [busyAction, setBusyAction] = useState(false);
@@ -1100,6 +1105,7 @@ function SotiMQ() {
       titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
       lieu: form.en_ligne ? "En visio" : form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
       description: form.description.trim() || "Aucune description fournie.", en_ligne: form.en_ligne,
+      visibilite: form.visibilite,
     }).select().single();
     if (error || !newAct) {
       setActionError("Impossible de publier la sortie : " + (error?.message || "erreur inconnue"));
@@ -1109,7 +1115,7 @@ function SotiMQ() {
     const { error: partError } = await supabase.from("participations").insert({ activity_id: newAct.id, user_id: session.user.id });
     if (partError) { setActionError("Sortie publiée, mais l'inscription automatique a échoué : " + partError.message); }
     await refreshCommunity();
-    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "", en_ligne: false });
+    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public" });
     setTab("fil");
     setDetailId(newAct.id);
     setBusyAction(false);
@@ -2287,6 +2293,13 @@ function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
 
       <Field label="Description">
         <textarea style={{ ...inputStyle, resize: "none", minHeight: 90 }} placeholder="Explique le déroulé, ce qu'il faut prévoir..." value={form.description} onChange={set("description")} />
+      </Field>
+
+      <Field label="Visibilité">
+        <div style={{ display: "flex", gap: 8 }}>
+          <Chip active={form.visibilite !== "amis"} colorActive={C.lagon} onClick={() => setForm((f) => ({ ...f, visibilite: "public" }))}>Tout le monde</Chip>
+          <Chip active={form.visibilite === "amis"} colorActive={C.lagon} onClick={() => setForm((f) => ({ ...f, visibilite: "amis" }))}>Uniquement mes amis</Chip>
+        </div>
       </Field>
 
       <button

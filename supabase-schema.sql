@@ -513,3 +513,22 @@ create policy "friendships_delete_own"
   using (auth.uid() = requester_id or auth.uid() = addressee_id);
 
 alter publication supabase_realtime add table public.friendships;
+
+-- ===================== Sorties : visibilité (tout le monde / amis uniquement) =====================
+alter table public.activities add column visibilite text not null default 'public' check (visibilite in ('public', 'amis'));
+
+drop policy "activities_select_all" on public.activities;
+
+create policy "activities_select_visible"
+  on public.activities for select
+  to authenticated
+  using (
+    visibilite = 'public'
+    or organisateur_id = auth.uid()
+    or exists (
+      select 1 from public.friendships f
+      where f.status = 'accepted'
+        and ((f.requester_id = auth.uid() and f.addressee_id = activities.organisateur_id)
+          or (f.addressee_id = auth.uid() and f.requester_id = activities.organisateur_id))
+    )
+  );
