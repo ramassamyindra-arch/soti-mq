@@ -39,7 +39,7 @@ import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, ChevronRight, Bell, MessageCircle,
   Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
-  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home, Hand
+  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home, Hand, UserPlus
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -2738,6 +2738,27 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onExportData, onOpenModeration, onOpenContact, onOpenAmis, receivedRequestsCount, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [inviteFeedback, setInviteFeedback] = useState("");
+
+  async function inviteFriends() {
+    const shareData = {
+      title: "Sòti MQ",
+      text: `${profile.prenom} t'invite sur Sòti MQ, l'appli pour trouver des sorties entre amis en Martinique !`,
+      url: window.location.origin + window.location.pathname,
+    };
+    if (navigator.share) {
+      try { await navigator.share(shareData); } catch (e) { /* annulé par l'utilisateur */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareData.url);
+        setInviteFeedback("Lien copié !");
+        setTimeout(() => setInviteFeedback(""), 2500);
+      } catch (e) {
+        setInviteFeedback("Impossible de copier le lien.");
+      }
+    }
+  }
+
   return (
     <div style={{ padding: "18px 18px 90px" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18 }}>
@@ -2880,6 +2901,19 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
         }}>
           <Users size={15} /> Modération
         </button>
+      )}
+
+      <button onClick={inviteFriends} style={{
+        width: "100%", padding: "13px", borderRadius: 12, border: "1.5px solid " + C.sableDark, background: C.blanc,
+        color: C.encre, fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 13.5, cursor: "pointer",
+        display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: inviteFeedback ? 6 : 12,
+      }}>
+        <UserPlus size={15} /> Inviter des amis
+      </button>
+      {inviteFeedback && (
+        <div style={{ textAlign: "center", fontFamily: "'Work Sans', sans-serif", fontSize: 12, color: C.mangrove, marginBottom: 12 }}>
+          {inviteFeedback}
+        </div>
       )}
 
       <button onClick={onOpenContact} style={{
