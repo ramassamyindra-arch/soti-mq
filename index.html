@@ -1317,6 +1317,7 @@ function SotiMQ() {
                     {tab === "moderation" && "Modération"}
                     {tab === "calendrier" && "Mon agenda"}
                     {tab === "amis" && "Mes amis"}
+                    {tab === "menu" && profile.prenom}
                   </div>
                   <button
                     onClick={closeScreen}
@@ -1373,13 +1374,19 @@ function SotiMQ() {
                   showBanner={showBanner} setShowBanner={setShowBanner}
                   onCreateNew={() => setTab("creer")}
                   profile={profile}
-                  onOpenProfil={() => setTab("profil")}
+                  onOpenMenu={() => setTab("menu")}
                   onOpenMessages={() => setTab("messages")}
                   onOpenCalendrier={() => setTab("calendrier")}
-                  onOpenAmis={() => setTab("amis")}
                   messagesCount={myConversations.length}
+                />
+              )}
+              {tab === "menu" && (
+                <AvatarMenuTab
+                  profile={profile}
                   activityTotal={activityTotal}
                   receivedRequestsCount={receivedRequests.length}
+                  onOpenProfil={() => setTab("profil")}
+                  onOpenAmis={() => setTab("amis")}
                 />
               )}
               {tab === "amis" && (
@@ -1621,14 +1628,12 @@ function MapRoundBtn({ onClick, children, badge }) {
 }
 
 function FilTab({
-  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, onOpenAmis, messagesCount,
-  activityTotal, receivedRequestsCount,
+  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenMenu, onOpenMessages, onOpenCalendrier, messagesCount,
   showBanner, setShowBanner,
   filterCat, setFilterCat, filterCommune, setFilterCommune,
   filterDate, setFilterDate, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo,
   filterFormat, setFilterFormat,
 }) {
-  const [showAvatarMenu, setShowAvatarMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [showList, setShowList] = useState(false);
   const [listSort, setListSort] = useState("toutes");
@@ -1718,63 +1723,13 @@ function FilTab({
     <div style={{ flex: 1, minHeight: 0, position: "relative" }}>
       <ActivityMap activities={activities} onOpen={onOpen} userPos={userPos} />
 
-      <div style={{ position: "absolute", top: 14, left: 14, zIndex: 400 }}>
-        <button
-          onClick={() => setShowAvatarMenu((s) => !s)}
-          aria-label="Menu profil"
-          style={{ border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)", display: "block" }}
-        >
-          <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
-        </button>
-
-        {showAvatarMenu && (
-          <React.Fragment>
-            <div style={{ position: "fixed", inset: 0, zIndex: 399 }} onClick={() => setShowAvatarMenu(false)} />
-            <div style={{
-              position: "absolute", top: 48, left: 0, zIndex: 401, background: C.blanc, borderRadius: 16,
-              boxShadow: "0 8px 24px rgba(30,42,36,0.25)", padding: "14px 16px", minWidth: 200,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: getActivityBadge(activityTotal) ? 8 : 4 }}>
-                <Avatar name={profile.prenom} src={profile.avatar_url} size={36} />
-                <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 15, color: C.encre }}>{profile.prenom}</div>
-              </div>
-              {getActivityBadge(activityTotal) && (
-                <div style={{ marginBottom: 10 }}><ActivityBadge total={activityTotal} /></div>
-              )}
-              <div style={{ height: 1, background: C.sableDark, margin: "8px 0 4px" }} />
-              <button
-                onClick={() => { setShowAvatarMenu(false); onOpenProfil(); }}
-                style={{
-                  width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 0", cursor: "pointer",
-                  fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, color: C.encre,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}
-              >
-                Mon profil <ChevronRight size={15} color="#9AA69E" />
-              </button>
-              <button
-                onClick={() => { setShowAvatarMenu(false); onOpenAmis(); }}
-                style={{
-                  width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 0", cursor: "pointer",
-                  fontFamily: "'Work Sans', sans-serif", fontWeight: 600, fontSize: 13.5, color: C.encre,
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                }}
-              >
-                Mes amis
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {receivedRequestsCount > 0 && (
-                    <span style={{
-                      background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 10, fontWeight: 700,
-                      minWidth: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px",
-                    }}>{receivedRequestsCount}</span>
-                  )}
-                  <ChevronRight size={15} color="#9AA69E" />
-                </div>
-              </button>
-            </div>
-          </React.Fragment>
-        )}
-      </div>
+      <button
+        onClick={onOpenMenu}
+        aria-label="Mon profil"
+        style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
+      >
+        <Avatar name={profile.prenom} src={profile.avatar_url} size={40} />
+      </button>
 
       <div style={{ position: "absolute", top: 14, right: 14, zIndex: 400, display: "flex", flexDirection: "column", gap: 8 }}>
         <MapRoundBtn onClick={() => setShowBanner((s) => !s)}><Bell size={17} color={C.lagon} /></MapRoundBtn>
@@ -2373,6 +2328,45 @@ function MessagesList({ conversations, onOpen }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+function AvatarMenuTab({ profile, activityTotal, receivedRequestsCount, onOpenProfil, onOpenAmis }) {
+  function MenuRow({ label, badgeCount, onClick }) {
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "16px 16px",
+          marginBottom: 10, cursor: "pointer", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, color: C.encre,
+        }}
+      >
+        {label}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {!!badgeCount && (
+            <span style={{
+              background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+              minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
+            }}>{badgeCount}</span>
+          )}
+          <ChevronRight size={17} color="#9AA69E" />
+        </div>
+      </button>
+    );
+  }
+
+  return (
+    <div style={{ padding: "10px 18px 90px" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 26, marginTop: 6 }}>
+        <Avatar name={profile.prenom} src={profile.avatar_url} size={72} />
+        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}</div>
+        {getActivityBadge(activityTotal) && <ActivityBadge total={activityTotal} />}
+      </div>
+
+      <MenuRow label="Mon profil" onClick={onOpenProfil} />
+      <MenuRow label="Mes amis" badgeCount={receivedRequestsCount} onClick={onOpenAmis} />
     </div>
   );
 }
