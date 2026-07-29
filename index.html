@@ -39,7 +39,7 @@ import {
   Waves, Mountain, Dumbbell, UtensilsCrossed, Music, Anchor,
   MapPin, Users, Send, Plus, ChevronLeft, ChevronRight, Bell, MessageCircle,
   Check, Clock, CalendarDays, Sparkles, X, LogOut, Pencil, Video, Download, Mail,
-  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home, Hand, UserPlus, Share2
+  SlidersHorizontal, Calendar, ChevronUp, ChevronDown, Heart, Home, Hand, UserPlus, Share2, Image
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 
@@ -814,7 +814,7 @@ function SotiMQ() {
 
   const [form, setForm] = useState({
     titre: "", categorie: "plage", commune: COMMUNES[0], lieu: "",
-    date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public",
+    date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public", image_url: "",
   });
 
   const [busyAction, setBusyAction] = useState(false);
@@ -1080,6 +1080,15 @@ function SotiMQ() {
     return { ok: true, url: data.publicUrl + "?t=" + Date.now() };
   }
 
+  async function uploadActivityImage(file) {
+    const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
+    const path = `${session.user.id}/${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from("activity-images").upload(path, file, { cacheControl: "3600" });
+    if (error) return { ok: false, message: error.message };
+    const { data } = supabase.storage.from("activity-images").getPublicUrl(path);
+    return { ok: true, url: data.publicUrl };
+  }
+
   async function joinActivity(id) {
     setBusyAction(true); setActionError("");
     const activity = getActivity(id);
@@ -1105,7 +1114,7 @@ function SotiMQ() {
       titre: form.titre.trim(), categorie: form.categorie, commune: form.commune,
       lieu: form.en_ligne ? "En visio" : form.lieu.trim(), date: form.date, heure: form.heure, places: Number(form.places) || 4,
       description: form.description.trim() || "Aucune description fournie.", en_ligne: form.en_ligne,
-      visibilite: form.visibilite,
+      visibilite: form.visibilite, image_url: form.image_url || null,
     }).select().single();
     if (error || !newAct) {
       setActionError("Impossible de publier la sortie : " + (error?.message || "erreur inconnue"));
@@ -1115,7 +1124,7 @@ function SotiMQ() {
     const { error: partError } = await supabase.from("participations").insert({ activity_id: newAct.id, user_id: session.user.id });
     if (partError) { setActionError("Sortie publiée, mais l'inscription automatique a échoué : " + partError.message); }
     await refreshCommunity();
-    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public" });
+    setForm({ titre: "", categorie: "plage", commune: profile.commune, lieu: "", date: "", heure: "", places: 6, description: "", en_ligne: false, visibilite: "public", image_url: "" });
     setTab("fil");
     setDetailId(newAct.id);
     setBusyAction(false);
@@ -1397,7 +1406,7 @@ function SotiMQ() {
                 />
               )}
               {tab === "creer" && (
-                <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} busy={busyAction} hasPhoto={!!profile.avatar_url} />
+                <CreerTab form={form} setForm={setForm} onPublish={publishActivity} formValid={formValid} busy={busyAction} hasPhoto={!!profile.avatar_url} onUploadImage={uploadActivityImage} />
               )}
               {tab === "messages" && !chatId && (
                 <MessagesList conversations={myConversations} onOpen={setChatId} />
@@ -2047,6 +2056,10 @@ function DetailSheet({ activity, joined, waitlisted, interested, onToggleInteret
       }}>
         <div style={{ width: 40, height: 4, background: C.sableDark, borderRadius: 4, margin: "6px auto 14px" }} />
 
+        {activity.image_url && (
+          <img src={activity.image_url} alt="" style={{ width: "calc(100% + 44px)", margin: "0 -22px 14px", height: 180, objectFit: "cover", display: "block" }} />
+        )}
+
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 36, height: 36, borderRadius: "50%", background: cat.color, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -2256,7 +2269,59 @@ function Field({ label, children }) {
 }
 const inputStyle = { width: "100%", padding: "12px 14px", borderRadius: 12, border: "1.5px solid " + C.sableDark, fontFamily: "'Work Sans', sans-serif", fontSize: 14, background: C.blanc };
 
-function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
+function ActivityImageUpload({ imageUrl, onUpload, onRemove }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef(null);
+
+  async function handleFile(e) {
+    const file = e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { setError("Image trop lourde (5 Mo max)."); return; }
+    setUploading(true); setError("");
+    const result = await onUpload(file);
+    setUploading(false);
+    if (result && result.ok === false) setError(result.message);
+  }
+
+  return (
+    <div>
+      {imageUrl ? (
+        <div style={{ position: "relative", borderRadius: 14, overflow: "hidden", marginBottom: 4 }}>
+          <img src={imageUrl} alt="" style={{ width: "100%", height: 160, objectFit: "cover", display: "block" }} />
+          <button
+            onClick={onRemove}
+            aria-label="Retirer la photo"
+            style={{
+              position: "absolute", top: 8, right: 8, background: "rgba(30,42,36,0.6)", border: "none", borderRadius: "50%",
+              width: 28, height: 28, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+            }}
+          >
+            <X size={14} color={C.blanc} />
+          </button>
+        </div>
+      ) : (
+        <div
+          onClick={() => inputRef.current && inputRef.current.click()}
+          style={{
+            border: "1.5px dashed " + C.sableDark, borderRadius: 14, padding: "24px", textAlign: "center", cursor: "pointer",
+            display: "flex", flexDirection: "column", alignItems: "center", gap: 6, background: C.blanc,
+          }}
+        >
+          <Image size={22} color="#9AA69E" />
+          <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 12.5, color: "#5B6960" }}>
+            {uploading ? "Envoi..." : "Ajouter une photo (optionnel)"}
+          </div>
+        </div>
+      )}
+      <input ref={inputRef} type="file" accept="image/*" onChange={handleFile} style={{ display: "none" }} />
+      {error && <div style={{ color: C.corail, fontFamily: "'Work Sans', sans-serif", fontSize: 11, marginTop: 4 }}>{error}</div>}
+    </div>
+  );
+}
+
+function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto, onUploadImage }) {
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   return (
     <div style={{ padding: "16px 18px 100px" }}>
@@ -2265,6 +2330,18 @@ function CreerTab({ form, setForm, onPublish, formValid, busy, hasPhoto }) {
           Ajoute une photo de profil (depuis l'onglet Profil) pour pouvoir publier une sortie.
         </div>
       )}
+      <Field label="Photo de la sortie">
+        <ActivityImageUpload
+          imageUrl={form.image_url}
+          onUpload={async (file) => {
+            const r = await onUploadImage(file);
+            if (r.ok) setForm((f) => ({ ...f, image_url: r.url }));
+            return r;
+          }}
+          onRemove={() => setForm((f) => ({ ...f, image_url: "" }))}
+        />
+      </Field>
+
       <Field label="Titre de la sortie">
         <input style={inputStyle} placeholder="Ex. Rando au Rocher du Diamant" value={form.titre} onChange={set("titre")} />
       </Field>
