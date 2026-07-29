@@ -1240,7 +1240,6 @@ function SotiMQ() {
 
   const myConversations = activities.filter((a) => joinedIds.includes(a.id));
   const organisedCount = profile ? activities.filter((a) => a.organisateur_id === profile.id).length : 0;
-  const activityTotal = organisedCount + joinedIds.length;
   const receivedRequests = session ? friendships.filter((f) => f.status === "pending" && f.addressee_id === session.user.id) : [];
   const sentRequests = session ? friendships.filter((f) => f.status === "pending" && f.requester_id === session.user.id) : [];
   const acceptedFriendships = session ? friendships.filter((f) => f.status === "accepted") : [];
@@ -1318,21 +1317,7 @@ function SotiMQ() {
                   <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 21, color: C.blanc, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {tab === "creer" && "Créer une sortie"}
                     {tab === "messages" && "Mes messages"}
-                    {tab === "profil" && (() => {
-                      const badge = getActivityBadge(activityTotal);
-                      const BadgeIcon = badge.icon;
-                      return (
-                        <React.Fragment>
-                          {profile.prenom}{profile.age ? `, ${profile.age}` : ""}
-                          <span style={{
-                            display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 999,
-                            background: "rgba(255,255,255,0.18)", color: C.blanc, fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif",
-                          }}>
-                            <BadgeIcon size={10} /> {badge.label}
-                          </span>
-                        </React.Fragment>
-                      );
-                    })()}
+                    {tab === "profil" && "Mon profil"}
                     {tab === "contact" && "Nous contacter"}
                     {tab === "moderation" && "Modération"}
                     {tab === "calendrier" && "Mon agenda"}
