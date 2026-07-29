@@ -1315,15 +1315,26 @@ function SotiMQ() {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 21, color: C.blanc }}>
+                  <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 21, color: C.blanc, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     {tab === "creer" && "Créer une sortie"}
                     {tab === "messages" && "Mes messages"}
-                    {tab === "profil" && "Mon profil"}
+                    {tab === "profil" && (
+                      <React.Fragment>
+                        {profile.prenom}{profile.age ? `, ${profile.age}` : ""}
+                        {getActivityBadge(activityTotal) && (
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", gap: 3, padding: "2px 8px", borderRadius: 999,
+                            background: "rgba(255,255,255,0.18)", color: C.blanc, fontSize: 10.5, fontWeight: 700, fontFamily: "'Work Sans', sans-serif",
+                          }}>
+                            <Sparkles size={10} /> {getActivityBadge(activityTotal).label}
+                          </span>
+                        )}
+                      </React.Fragment>
+                    )}
                     {tab === "contact" && "Nous contacter"}
                     {tab === "moderation" && "Modération"}
                     {tab === "calendrier" && "Mon agenda"}
                     {tab === "amis" && "Mes amis"}
-                    {tab === "menu" && profile.prenom}
                   </div>
                   <button
                     onClick={closeScreen}
@@ -1380,19 +1391,10 @@ function SotiMQ() {
                   showBanner={showBanner} setShowBanner={setShowBanner}
                   onCreateNew={() => setTab("creer")}
                   profile={profile}
-                  onOpenMenu={() => setTab("menu")}
+                  onOpenProfil={() => setTab("profil")}
                   onOpenMessages={() => setTab("messages")}
                   onOpenCalendrier={() => setTab("calendrier")}
                   messagesCount={myConversations.length}
-                />
-              )}
-              {tab === "menu" && (
-                <AvatarMenuTab
-                  profile={profile}
-                  activityTotal={activityTotal}
-                  receivedRequestsCount={receivedRequests.length}
-                  onOpenProfil={() => setTab("profil")}
-                  onOpenAmis={() => setTab("amis")}
                 />
               )}
               {tab === "amis" && (
@@ -1431,6 +1433,8 @@ function SotiMQ() {
                   onExportData={exportMyData}
                   onOpenModeration={() => setTab("moderation")}
                   onOpenContact={() => setTab("contact")}
+                  onOpenAmis={() => setTab("amis")}
+                  receivedRequestsCount={receivedRequests.length}
                   pushPermission={pushPermission}
                   pushSubscribed={pushSubscribed}
                   pushBusy={pushBusy}
@@ -1634,7 +1638,7 @@ function MapRoundBtn({ onClick, children, badge }) {
 }
 
 function FilTab({
-  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenMenu, onOpenMessages, onOpenCalendrier, messagesCount,
+  activities, joinedIds, waitlistIds, onOpen, onCreateNew, profile, onOpenProfil, onOpenMessages, onOpenCalendrier, messagesCount,
   showBanner, setShowBanner,
   filterCat, setFilterCat, filterCommune, setFilterCommune,
   filterDate, setFilterDate, filterDateFrom, setFilterDateFrom, filterDateTo, setFilterDateTo,
@@ -1730,7 +1734,7 @@ function FilTab({
       <ActivityMap activities={activities} onOpen={onOpen} userPos={userPos} />
 
       <button
-        onClick={onOpenMenu}
+        onClick={onOpenProfil}
         aria-label="Mon profil"
         style={{ position: "absolute", top: 14, left: 14, zIndex: 400, border: "none", borderRadius: "50%", padding: 0, cursor: "pointer", boxShadow: "0 2px 8px rgba(30,42,36,0.28)" }}
       >
@@ -2345,45 +2349,6 @@ function MessagesList({ conversations, onOpen }) {
   );
 }
 
-function AvatarMenuTab({ profile, activityTotal, receivedRequestsCount, onOpenProfil, onOpenAmis }) {
-  function MenuRow({ label, badgeCount, onClick }) {
-    return (
-      <button
-        onClick={onClick}
-        style={{
-          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
-          background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "16px 16px",
-          marginBottom: 10, cursor: "pointer", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14.5, color: C.encre,
-        }}
-      >
-        {label}
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          {!!badgeCount && (
-            <span style={{
-              background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 10.5, fontWeight: 700,
-              minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
-            }}>{badgeCount}</span>
-          )}
-          <ChevronRight size={17} color="#9AA69E" />
-        </div>
-      </button>
-    );
-  }
-
-  return (
-    <div style={{ padding: "10px 18px 90px" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10, marginBottom: 26, marginTop: 6 }}>
-        <Avatar name={profile.prenom} src={profile.avatar_url} size={72} />
-        <div style={{ fontFamily: "'Fraunces', serif", fontWeight: 700, fontSize: 20, color: C.encre }}>{profile.prenom}</div>
-        {getActivityBadge(activityTotal) && <ActivityBadge total={activityTotal} />}
-      </div>
-
-      <MenuRow label="Mon profil" onClick={onOpenProfil} />
-      <MenuRow label="Mes amis" badgeCount={receivedRequestsCount} onClick={onOpenAmis} />
-    </div>
-  );
-}
-
 function AmisTab({ myId, profilesById, receivedRequests, sentRequests, acceptedFriendships, onSendRequest, onAccept, onRemove }) {
   const otherIdOf = (f) => (f.requester_id === myId ? f.addressee_id : f.requester_id);
   const involvedIds = new Set([
@@ -2768,7 +2733,7 @@ function ChatScreen({ activity, messages, profile, onBack, onSend, onReport, cha
 
 /* ---------------------------------- PROFIL ---------------------------------- */
 
-function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onExportData, onOpenModeration, onOpenContact, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
+function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joinedCount, onSave, onSignOut, onDeleteAccount, onExportData, onOpenModeration, onOpenContact, onOpenAmis, receivedRequestsCount, onUploadAvatar, busy, pushPermission, pushSubscribed, pushBusy, onEnablePush, onDisablePush }) {
   const [editing, setEditing] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   return (
@@ -2806,6 +2771,26 @@ function ProfilTab({ profile, setProfile, toggleInterest, organisedCount, joined
         <StatCard n={organisedCount} label="sorties organisées" />
         <StatCard n={joinedCount} label="sorties rejointes" />
       </div>
+
+      <button
+        onClick={onOpenAmis}
+        style={{
+          width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between",
+          background: C.blanc, border: "1px solid " + C.sableDark, borderRadius: 14, padding: "14px 16px",
+          marginBottom: 20, cursor: "pointer", fontFamily: "'Work Sans', sans-serif", fontWeight: 700, fontSize: 14, color: C.encre,
+        }}
+      >
+        Mes amis
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          {!!receivedRequestsCount && (
+            <span style={{
+              background: C.corail, color: C.blanc, borderRadius: 999, fontSize: 10.5, fontWeight: 700,
+              minWidth: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 4px",
+            }}>{receivedRequestsCount}</span>
+          )}
+          <ChevronRight size={17} color="#9AA69E" />
+        </div>
+      </button>
 
       {!editing && profile.bio && (
         <div style={{ fontFamily: "'Work Sans', sans-serif", fontSize: 13, color: C.encre, lineHeight: 1.5, marginBottom: 20, fontStyle: "italic" }}>
